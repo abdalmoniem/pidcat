@@ -1,0 +1,17 @@
+[project]
+name = "pidcat"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pillow>=12.0.0",
+    "pyinstaller>=6.16.0",
+]
+
+[tool.tomlscript]
+# Command to build the executable using PyInstaller
+build = "python build.py"
+
+# Command to clean the build directory
+clean = "rm -rf generated"

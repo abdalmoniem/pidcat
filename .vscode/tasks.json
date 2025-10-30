@@ -1,0 +1,22 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Inno Setup: Compile Script",
+      "type": "process",
+      "command": "C:\\Users\\hifna\\AppData\\Local\\Programs\\Inno Setup 6\\ISCC.exe",
+      "args": [
+        // "${file}"
+        "setup/setup.iss"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "echo": false
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ]
+}
