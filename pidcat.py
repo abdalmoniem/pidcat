@@ -10,7 +10,7 @@ from subprocess import PIPE, Popen
 from ctypes import WinError, byref, c_uint, windll
 from typing import IO, List, Dict, Set, Optional, Tuple, Any, TextIO
 
-__version__ = "2.5.0"
+__version__ = "2.5.1"
 
 # --- CONSTANTS and GLOBALS ---
 LOG_LEVELS: str = "VDIWEF"
@@ -418,7 +418,7 @@ def CreateArgParser() -> argparse.ArgumentParser:
         "--show-package",
         dest="show_package",
         action="store_true",
-        default=True,
+        default=False,
         help="Show package/process name of each log message.",
     )
     parser.add_argument(
@@ -645,7 +645,7 @@ def ProcessLogLine(
 
             if len(tag) > tagWidth:
                 tag = f"{tag[: tagWidth - 3]}..."
-            tag = tag.rjust(tagWidth)
+            tag = tag.rjust(tagWidth) if args.show_package else tag.ljust(tagWidth)
 
             lineBuffer += Colorize(tag, color)
         else:
