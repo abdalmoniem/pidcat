@@ -2,10 +2,11 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define AppName "PidCat"
-#define AppVersion "1.1.0"
+#define AppVersion "2.5.0"
 #define AppPublisher "AbdElMoniem ElHifnawy"
 #define AppURL "https://abdalmoniem.github.io"
 #define AppExeName "PidCat.exe"
+#define DateTime GetDateTimeString('ddd_dd_mmm_yyyy_hh_nn_ss.zzz_ampm', '', '')
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -13,7 +14,7 @@
 AppId={{0DF6BA67-96F8-4011-AE2B-7055C95B0F6A}
 AppName={#AppName}
 AppVersion={#AppVersion}
-;AppVerName={#AppName} {#AppVersion}
+AppVerName={#AppName}
 AppPublisher={#AppPublisher}
 AppPublisherURL={#AppURL}
 AppSupportURL={#AppURL}
@@ -35,7 +36,7 @@ ChangesEnvironment=true
 ; Uncomment the following line to run in non administrative install mode (install for current user only).
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
-OutputBaseFilename=PidCat
+OutputBaseFilename=PidCat_{#DateTime}
 SetupIconFile=..\resources\icon.ico
 SolidCompression=yes
 WizardStyle=modern
