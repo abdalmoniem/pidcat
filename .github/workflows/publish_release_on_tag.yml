@@ -1,0 +1,90 @@
+#file: noinspection Annotator
+name: Publish Release On Tag
+run-name: ${{ github.workflow }} ${{ github.ref_name }} ${{ github.event.repository.updated_at}}
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+'
+      - 'v[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+.[0-9]+'
+
+permissions: { }
+
+jobs:
+  publish-release-on-tag:
+    name: Publish Release On Tag
+    runs-on: windows-latest
+    steps:
+      - name: Checkout ${{ github.ref }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup UV
+        uses: astral-sh/setup-uv@v7.1.6
+
+      - name: Setup Python
+        run: uv python install
+
+      - name: Sync Dependencies
+        run: uv sync
+
+      - name: Build Executable
+        run: uv run build.py
+
+      - name: Build Installer
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+        with:
+          path: setup/setup.iss
+
+      - name: Get Installer Name
+        run: |
+          $installerName = $(ls .\setup\Output\*.exe).BaseName
+          $installerPath = $(ls .\setup\Output\*.exe).FullName
+
+          echo ARTIFACT_NAME=$installerName >> $env:GITHUB_ENV
+          echo ARTIFACT_PATH=$installerPath >> $env:GITHUB_ENV
+
+      - name: Create Artifact ${{ env.ARTIFACT_NAME }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.ARTIFACT_PATH }}
+          if-no-files-found: error
+
+      - name: Get Previous Tag
+        run: |
+          try {
+            $tag = git describe --tags --abbrev=0 HEAD~1 2>$null
+            if ($LASTEXITCODE -ne 0) {
+              throw
+            }
+          } catch {
+            $tag = "HEAD"
+          }
+
+          echo PREVIOUS_TAG=$tag >> $env:GITHUB_ENV
+
+      - name: Generate Changelog
+        id: generate-changelog
+        uses: mikepenz/release-changelog-builder-action@v6.0.1
+        with:
+          mode: "COMMIT"
+          fromTag: ${{ env.PREVIOUS_TAG }}
+          toTag: ${{ github.ref_name }}
+          token: ${{ secrets.RELEASE_GITHUB_TOKEN }}
+
+      - name: Publish Release ${{ github.ref_name }}
+        uses: svenstaro/upload-release-action@v2
+        with:
+          file: ${{ env.ARTIFACT_PATH }}
+          tag: ${{ github.ref }}
+          draft: false
+          make_latest: true
+          overwrite: true
+          promote: true
+          body: ${{ steps.generate-changelog.outputs.changelog }}
+          release_name: ${{ github.ref_name }}
+          repo_token: ${{ secrets.RELEASE_GITHUB_TOKEN }}
