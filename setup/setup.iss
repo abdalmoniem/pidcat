@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define AppName "PidCat"
-#define AppVersion "2.5.1"
+#define AppVersion "2.5.2"
 #define AppPublisher "AbdElMoniem ElHifnawy"
 #define AppURL "https://abdalmoniem.github.io"
 #define AppExeName "PidCat.exe"

@@ -10,7 +10,7 @@ from subprocess import PIPE, Popen
 from ctypes import WinError, byref, c_uint, windll
 from typing import IO, List, Dict, Set, Optional, Tuple, Any, TextIO
 
-__version__ = "2.5.1"
+__version__ = "2.5.2"
 
 # --- CONSTANTS and GLOBALS ---
 LOG_LEVELS: str = "VDIWEF"
@@ -64,6 +64,9 @@ PID_START: re.Pattern = re.compile(
 )
 PID_START_DALVIK: re.Pattern = re.compile(
     r"^E/dalvikvm\(\s*(\d+)\): >>>>> ([a-zA-Z0-9._:]+) \[ userId:0 \| appId:(\d+) \]$"
+)
+CURRENT_PACKAGE: re.Pattern = re.compile(
+    r"VisibleActivityProcess\:\[\s*ProcessRecord\{\w+\s*\d+\:(.*?)\/\w+\}\]"
 )
 
 
@@ -223,22 +226,20 @@ def GetCurrentAppPackage(baseAdbCommand: List[str]) -> Optional[str]:
     """Gets the package name of the currently running app."""
 
     try:
-        systemDumpCommand: List[str] = baseAdbCommand + [
+        systemDumpCommand = baseAdbCommand + [
             "shell",
             "dumpsys",
             "activity",
             "activities",
         ]
 
-        systemDump: str = (
+        systemDump = (
             subprocess.Popen(systemDumpCommand, stdout=PIPE, stderr=PIPE)
             .communicate()[0]
             .decode("utf-8", "replace")
         )
 
-        match: Optional[re.Match[str]] = re.search(
-            ".*TaskRecord.*A[= ]([^ ^}]*)", systemDump
-        )
+        match = re.search(CURRENT_PACKAGE, systemDump)
 
         return match.group(1) if match else None
     except Exception as ex:
