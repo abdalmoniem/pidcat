@@ -15,3 +15,6 @@ build = "python build.py"
 
 # Command to clean the build directory
 clean = "rm -rf generated"
+
+[tool.ruff]
+line-length = 120
