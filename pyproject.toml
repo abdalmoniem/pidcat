@@ -5,16 +5,27 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pillow>=12.0.0",
-    "pyinstaller>=6.16.0",
+    "pillow==12.0.0",
+    "pyinstaller==6.17.0",
 ]
 
 [tool.tomlscript]
 # Command to build the executable using PyInstaller
-build = "python build.py"
+build = "uv run build.py"
 
 # Command to clean the build directory
-clean = "rm -rf generated"
+clean = "rm -rf generated && rm -rf setup/Output"
+
+# Command to rebuild the executable
+rebuild = "tomlscript clean && tomlscript build"
+
+build-installer = '"C:/Users/hifna/AppData/Local/Programs/Inno Setup 6/ISCC.exe" setup/setup.iss'
+
+build-all = "tomlscript rebuild && tomlscript build-installer"
+
+install = "uv run python -c \"import subprocess, glob; subprocess.run(glob.glob('setup/Output/*.exe')[0])\""
+
+reinstall = "tomlscript build-all && tomlscript install"
 
 [tool.ruff]
 line-length = 120

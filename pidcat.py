@@ -9,19 +9,11 @@ from dataclasses import dataclass
 from subprocess import PIPE, Popen
 from typing import List, Dict, Set, Optional, Tuple, TextIO
 
-__version__ = "2.5.2"
+__version__ = "2.5.3"
 
 # --- CONSTANTS and GLOBALS ---
 LOG_LEVELS = "VDIWEF"
-LOG_LEVELS_MAP = dict([(LOG_LEVELS[index], index) for index in range(len(LOG_LEVELS))])
-TAGTYPES = {
-    "V": " V ",
-    "D": " D ",
-    "I": " I ",
-    "W": " W ",
-    "E": " E ",
-    "F": " F ",
-}
+LOG_LEVELS_MAP = {level: index for index, level in enumerate(LOG_LEVELS)}
 
 RESET = "\033[0m"
 BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
@@ -54,6 +46,8 @@ CURRENT_PACKAGE = re.compile(r"VisibleActivityProcess\:\[\s*ProcessRecord\{\w+\s
 
 @dataclass
 class State:
+    """Holds the current state of the logcat processing."""
+
     pids_map: Dict[str, str]
     last_tag: Optional[str]
     app_pid: Optional[str]
@@ -64,9 +58,35 @@ class State:
 
 @dataclass
 class ColorConfig:
-    width: int
-    show_colors: bool
-    output_file: Optional[TextIO]
+    """Configuration for color output."""
+
+    consoleWidth: int
+    showColors: bool
+    outputFile: Optional[TextIO]
+
+
+@dataclass
+class Args:
+    """Configuration for logcat filtering and display."""
+
+    package: List[str]
+    tagWidth: int = 20
+    packageWidth: int = 20
+    minLevel: str = "V"
+    showPackage: bool = False
+    deviceSerial: Optional[str] = None
+    useDevice: bool = False
+    useEmulator: bool = False
+    keepLogcat: bool = False
+    tag: Optional[List[str]] = None
+    ignoredTag: Optional[List[str]] = None
+    all: bool = False
+    output: str = ""
+    regex: Optional[str] = None
+    colorGC: bool = False
+    noColor: bool = False
+    alwaysShowTags: bool = False
+    currentApp: bool = False
 
 
 def termColor(foreground: Optional[int] = None, background: Optional[int] = None) -> str:
@@ -159,18 +179,18 @@ def isTagInTags(tag: str, tags: List[str]) -> bool:
     return False
 
 
-def getAdbCommand(args: argparse.Namespace) -> List[str]:
+def getAdbCommand(args: Args) -> List[str]:
     """Constructs the base adb command list."""
 
     baseAdbCommand = ["adb"]
 
-    if args.device_serial:
-        baseAdbCommand.extend(["-s", args.device_serial])
+    if args.deviceSerial:
+        baseAdbCommand.extend(["-s", args.deviceSerial])
 
-    if args.use_device:
+    if args.useDevice:
         baseAdbCommand.append("-d")
 
-    if args.use_emulator:
+    if args.useEmulator:
         baseAdbCommand.append("-e")
 
     return baseAdbCommand
@@ -199,11 +219,7 @@ def getCurrentAppPackage(baseAdbCommand: List[str]) -> Optional[str]:
         return None
 
 
-def getInitialPidsMap(
-    baseAdbCommand: List[str],
-    catchallPackage: List[str],
-    args: argparse.Namespace,
-) -> Dict[str, str]:
+def getInitialPidsMap(baseAdbCommand: List[str], catchallPackage: List[str], args: Args) -> Dict[str, str]:
     """Populates initial PIDs map {PID: PackageName} for catch-all packages or all processes if args.all is True."""
 
     pidsMap = {}
@@ -319,7 +335,11 @@ def parseProcStart(line: str) -> Optional[Tuple[str, str, str, str, str]]:
 def createArgParser() -> argparse.ArgumentParser:
     """Creates and returns the ArgumentParser instance."""
 
-    parser = argparse.ArgumentParser(description="Filter logcat by package name and colorize output.")
+    parser = argparse.ArgumentParser(
+        prog=Path(sys.argv[0]).stem,
+        description="A colorized Android logcat viewer with advanced filtering capabilities."
+    )
+
     parser.add_argument("package", nargs="*", help="Application package name(s)")
     parser.add_argument(
         "-v",
@@ -329,67 +349,41 @@ def createArgParser() -> argparse.ArgumentParser:
         help="Print the version number and exit",
     )
     parser.add_argument(
-        "-m",
-        "--tag-width",
-        metavar="M",
-        dest="tag_width",
-        type=int,
-        default=20,
-        help="Width of log tag",
-    )
-    parser.add_argument(
-        "-n",
-        "--package-width",
-        metavar="N",
-        dest="package_width",
-        type=int,
-        default=20,  # Defaulting to the old fixed width
-        help="Width of package/process name column.",
-    )
-    parser.add_argument(
-        "-l",
-        "--min-level",
-        dest="min_level",
-        type=str,
-        choices=LOG_LEVELS + LOG_LEVELS.lower(),
-        default="V",
-        help="Minimum level to be displayed",
-    )
-    parser.add_argument(
         "-p",
         "--show-package",
-        dest="show_package",
+        dest="showPackage",
         action="store_true",
         default=False,
-        help="Show package/process name of each log message.",
-    )
-    parser.add_argument(
-        "-s",
-        "--serial",
-        dest="device_serial",
-        help="Device serial number (adb -s option)",
+        help="Filter output by specified package/process name(s)",
     )
     parser.add_argument(
         "-d",
         "--device",
-        dest="use_device",
+        dest="useDevice",
         action="store_true",
         help="Use first device for log input (adb -d option)",
     )
     parser.add_argument(
         "-e",
         "--emulator",
-        dest="use_emulator",
+        dest="useEmulator",
         action="store_true",
         help="Use first emulator for log input (adb -e option)",
     )
     parser.add_argument(
         "-k",
         "--keep",
-        dest="keep_logcat",
+        dest="keepLogcat",
         action="store_true",
         default=False,
         help="Keep the entire log before running",
+    )
+    parser.add_argument(
+        "-a",
+        "--all",
+        dest="all",
+        action="store_true",
+        help="Print all log messages (disables package filter)",
     )
     parser.add_argument(
         "-t",
@@ -403,17 +397,44 @@ def createArgParser() -> argparse.ArgumentParser:
         "-i",
         "--ignore-tag",
         metavar="IGNORED_TAG",
-        dest="ignored_tag",
+        dest="ignoredTag",
         action="append",
         help="Filter output by ignoring specified tag(s)",
     )
     parser.add_argument(
-        "-a",
-        "--all",
-        dest="all",
-        action="store_true",
-        # default=True,
-        help="Print all log messages (disables package filter)",
+        "-m",
+        "--tag-width",
+        metavar="M",
+        dest="tagWidth",
+        type=int,
+        default=20,
+        help="Width of tag column",
+    )
+    parser.add_argument(
+        "-n",
+        "--package-width",
+        metavar="N",
+        dest="packageWidth",
+        type=int,
+        default=20,  # Defaulting to the old fixed width
+        help="Width of package/process name column",
+    )
+    parser.add_argument(
+        "-l",
+        "--min-level",
+        dest="minLevel",
+        metavar=f"LEVEL [{'|'.join(LOG_LEVELS + LOG_LEVELS.lower())}]",
+        type=str,
+        choices=LOG_LEVELS + LOG_LEVELS.lower(),
+        default="V",
+        help="Minimum level to be displayed",
+    )
+    parser.add_argument(
+        "-s",
+        "--serial",
+        metavar="DEVICE_SERIAL",
+        dest="deviceSerial",
+        help="Device serial number (adb -s option)",
     )
     parser.add_argument(
         "-o",
@@ -432,25 +453,25 @@ def createArgParser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--color-gc",
-        dest="color_gc",
+        dest="colorGC",
         action="store_true",
         help="Color garbage collection",
     )
     parser.add_argument(
         "--no-color",
-        dest="no_color",
+        dest="noColor",
         action="store_true",
         help="Disable colors",
     )
     parser.add_argument(
-        "--always-display-tags",
-        dest="always_tags",
+        "--always-show-tags",
+        dest="alwaysShowTags",
         action="store_true",
         help="Always display the tag name",
     )
     parser.add_argument(
         "--current",
-        dest="current_app",
+        dest="currentApp",
         action="store_true",
         help="Filter logcat by current running app",
     )
@@ -458,25 +479,20 @@ def createArgParser() -> argparse.ArgumentParser:
     return parser
 
 
-def processLogLine(
-    line: str,
-    state: State,
-    args: argparse.Namespace,
-    colorConfig: ColorConfig,
-) -> None:
+def processLogLine(line: str, state: State, args: Args, colorConfig: ColorConfig) -> None:
     """Handles the processing and output of a single log line."""
 
     pidsMap = state.pids_map
     lastTag = state.last_tag
     appPid = state.app_pid
     minLevel = state.min_level
-    width = colorConfig.width
-    showColors = colorConfig.show_colors
-    outputFile = colorConfig.output_file
+    width = colorConfig.consoleWidth
+    showColors = colorConfig.showColors
+    outputFile = colorConfig.outputFile
     namedProcesses = state.named_processes
     catchallPackage = state.catchall_package
-    packageWidth = args.package_width
-    tagWidth = args.tag_width
+    packageWidth = args.packageWidth
+    tagWidth = args.tagWidth
 
     def writeOutput(outputLine: str) -> None:
         lineNoColor = NO_COLOR.sub("", outputLine)
@@ -509,7 +525,7 @@ def processLogLine(
             appPid = linePid
 
             # Recalculate header size for process start/end messages
-            currentHeaderSize = (packageWidth + 2 if args.show_package else 0) + args.tag_width + baseLevelSize
+            currentHeaderSize = (packageWidth + 2 if args.showPackage else 0) + args.tagWidth + baseLevelSize
 
             lineBuffer = "\n"
             lineBuffer += colorize(" " * (currentHeaderSize - 1), background=WHITE)
@@ -526,7 +542,7 @@ def processLogLine(
         if deadPid in pidsMap:
             del pidsMap[deadPid]
 
-        currentHeaderSize = (packageWidth + 2 if args.show_package else 0) + args.tag_width + baseLevelSize
+        currentHeaderSize = (packageWidth + 2 if args.showPackage else 0) + args.tagWidth + baseLevelSize
 
         lineBuffer = "\n"
         lineBuffer += colorize(" " * (currentHeaderSize - 1), background=RED)
@@ -543,7 +559,7 @@ def processLogLine(
     if level in LOG_LEVELS_MAP and LOG_LEVELS_MAP[level] < minLevel:
         return
 
-    if args.ignored_tag and isTagInTags(tag, args.ignored_tag):
+    if args.ignoredTag and isTagInTags(tag, args.ignoredTag):
         return
 
     if args.tag and not isTagInTags(tag, args.tag):
@@ -560,7 +576,7 @@ def processLogLine(
     currentHeaderSize = 0
 
     # --- PACKAGE NAME SECTION ---
-    if args.show_package and owner:
+    if args.showPackage and owner:
         packageName = pidsMap.get(owner, "UNKNOWN")
         pkgColor = allocateColor(packageName)
 
@@ -574,14 +590,14 @@ def processLogLine(
     # ----------------------------
 
     # --- TAG SECTION ---
-    if args.tag_width > 0:
-        if tag != lastTag or args.always_tags:
+    if args.tagWidth > 0:
+        if tag != lastTag or args.alwaysShowTags:
             lastTag = tag
             color = allocateColor(tag)
 
             if len(tag) > tagWidth:
                 tag = f"{tag[: tagWidth - 3]}..."
-            tag = tag.rjust(tagWidth) if args.show_package else tag.ljust(tagWidth)
+            tag = tag.rjust(tagWidth) if args.showPackage else tag.ljust(tagWidth)
 
             lineBuffer += colorize(tag, color)
         else:
@@ -592,7 +608,7 @@ def processLogLine(
     # ----------------------------
 
     # --- LEVEL SECTION ---
-    levelStr = TAGTYPES.get(level, " " + level + " ")
+    levelStr = f" {level} "
     if showColors:
         foreground = {
             "V": WHITE,
@@ -628,7 +644,7 @@ def processLogLine(
     messageRules[STRICT_MODE] = r"\1%s\2%s\3%s" % (termColor(RED), termColor(YELLOW), RESET)
 
     # GC coloring rule
-    if args.color_gc:
+    if args.colorGC:
         COLOR_GC = re.compile(
             r"^(GC_(?:CONCURRENT|FOR_M?ALLOC|EXTERNAL_ALLOC|EXPLICIT) )"
             + r"(freed <?\d+.)(, \d+\% free \d+./\d+., )(paused \d+ms(?:\+\d+ms)?)"
@@ -652,14 +668,16 @@ def main() -> None:
     parser = createArgParser()
     args = parser.parse_args()
 
+    args = Args(**vars(args))
+
     if args.tag:
         args.tag = [tag.strip() for tag_arg in args.tag for tag in tag_arg.split(",")]
 
-    if args.ignored_tag:
-        args.ignored_tag = [tag.strip() for tag_arg in args.ignored_tag for tag in tag_arg.split(",")]
+    if args.ignoredTag:
+        args.ignoredTag = [tag.strip() for tag_arg in args.ignoredTag for tag in tag_arg.split(",")]
 
-    minLevel = LOG_LEVELS_MAP[args.min_level.upper()]
-    width = getConsoleWidth()
+    minLevel = LOG_LEVELS_MAP[args.minLevel.upper()]
+    consoleWidth = getConsoleWidth()
     outputFile = None
 
     try:
@@ -667,9 +685,9 @@ def main() -> None:
             outputFile = open(args.output, "a+")
 
         baseAdbCommand = getAdbCommand(args)
-        packages = list(args.package)
+        packages = list(set(args.package))
 
-        if args.current_app:
+        if args.currentApp:
             runningPackage = getCurrentAppPackage(baseAdbCommand)
             if runningPackage:
                 packages.append(runningPackage)
@@ -688,7 +706,7 @@ def main() -> None:
         if args.regex:
             adbCommand.extend(["-e", args.regex])
 
-        if not args.keep_logcat:
+        if not args.keepLogcat:
             adbClearCommand = baseAdbCommand + ["logcat", "-c"]
             subprocess.run(adbClearCommand, check=False)
 
@@ -721,12 +739,12 @@ def main() -> None:
             catchall_package=catchallPackage,
         )
 
-        colorConfig = ColorConfig(width=width, show_colors=not args.no_color, output_file=outputFile)
+        colorConfig = ColorConfig(consoleWidth, not args.noColor, outputFile)
 
         if packages:
-            print(f"listening for logcat messages from packages: {', '.join(packages)}...")
+            print(f"Capturing logcat messages from packages: [{', '.join(packages)}]...")
         else:
-            print("listening for logcat messages...")
+            print("Capturing logcat messages...")
 
         while adb.poll() is None and logStream:
             rawLine = logStream.readline()
@@ -741,10 +759,10 @@ def main() -> None:
                 line = str(rawLine).strip()
 
             # Update the console width if it has changed
-            colorConfig.width = getConsoleWidth()
+            colorConfig.consoleWidth = getConsoleWidth()
             processLogLine(line, state, args, colorConfig)
     except KeyboardInterrupt:
-        print("Logcat monitoring stopped by user.", file=sys.stderr)
+        print(f"\n\n\n{Path(parser.prog).stem} stopped by user!", file=sys.stderr)
     except Exception as ex:
         error = colorize(f"An error occurred during log processing: {ex}", foreground=RED)
         print(error, file=sys.stderr)

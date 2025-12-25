@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define AppName "PidCat"
-#define AppVersion "2.5.2"
+#define AppVersion "2.5.3"
 #define AppPublisher "AbdElMoniem ElHifnawy"
 #define AppURL "https://abdalmoniem.github.io"
 #define AppExeName "PidCat.exe"
@@ -19,7 +19,8 @@ AppPublisher={#AppPublisher}
 AppPublisherURL={#AppURL}
 AppSupportURL={#AppURL}
 AppUpdatesURL={#AppURL}
-DefaultDirName={autopf}\{#AppName}
+; DefaultDirName={autopf}\{#AppName}
+DefaultDirName={code:GetDefaultDirName}
 UninstallDisplayIcon={app}\{#AppExeName}
 ; "ArchitecturesAllowed=x64compatible" specifies that Setup cannot run
 ; on anything but x64 and Windows 11 on Arm.
@@ -35,7 +36,7 @@ InfoBeforeFile=info.txt
 ChangesEnvironment=true
 ; Uncomment the following line to run in non administrative install mode (install for current user only).
 PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
+; PrivilegesRequiredOverridesAllowed=dialog
 OutputBaseFilename=PidCat_{#DateTime}
 SetupIconFile=..\resources\icon.ico
 SolidCompression=yes
@@ -43,6 +44,10 @@ WizardStyle=modern
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Messages]
+SetupAppTitle=Setup - {#AppName} v{#AppVersion}
+SetupWindowTitle=Setup - {#AppName} v{#AppVersion}
 
 [Files]
 Source: "..\generated\dist\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
@@ -56,7 +61,7 @@ Name: "{group}\{cm:UninstallProgram,{#AppName}}"; Filename: "{uninstallexe}"
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent unchecked
 
 ; Use ping.exe as a dummy, quick-running command to trigger the AfterInstall function
-Filename: "{sys}\ping.exe"; Description: "Add program directory to the system PATH"; Flags: nowait skipifsilent postinstall runhidden unchecked; AfterInstall: EnvAddPath(ExpandConstant('{app}'))
+Filename: "{sys}\ping.exe"; Description: "Add program directory to the system PATH"; Flags: nowait skipifsilent postinstall runhidden; AfterInstall: EnvAddPath(ExpandConstant('{app}'))
 
 [Code]
 var
@@ -69,6 +74,14 @@ const EnvironmentKey = 'Environment';
 
 procedure ExitProcess(uExitCode: Integer);
   external 'ExitProcess@kernel32.dll stdcall';
+
+function GetDefaultDirName(Param: String): String;
+begin
+  if IsAdmin then
+    Result := ExpandConstant('{commonpf}\{#AppPublisher}\{#AppName}')
+  else
+    Result := ExpandConstant('{localappdata}\Programs\{#AppPublisher}\{#AppName}');
+end;
 
 procedure EnvAddPath(Path: string);
 var
@@ -236,8 +249,12 @@ begin
   Result := True;
 end;
 
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then if WizardSilent then EnvAddPath(ExpandConstant('{app}'));
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
-    if CurUninstallStep = usPostUninstall then
-    EnvRemovePath(ExpandConstant('{app}'));
+    if CurUninstallStep = usPostUninstall then EnvRemovePath(ExpandConstant('{app}'));
 end;

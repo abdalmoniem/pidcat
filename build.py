@@ -2,7 +2,7 @@ import os
 import subprocess
 
 
-__version__ = "2.5.2"
+__version__ = "2.5.3"
 
 TAB_WIDTH = 4
 TAB_CHAR = " " * TAB_WIDTH
