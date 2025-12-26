@@ -23,7 +23,7 @@ sysStderr = cast(TextIOWrapper, sys.stderr)
 sysStdout.reconfigure(encoding="utf-8")
 sysStderr.reconfigure(encoding="utf-8")
 
-VERSION = "2.5.4"
+VERSION = "2.5.5"
 
 TAB_WIDTH = 4
 TAB_CHAR = " " * TAB_WIDTH

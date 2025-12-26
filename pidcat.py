@@ -29,24 +29,68 @@ from terminalColors import MAGENTA
 from terminalColors import colorize
 from terminalColors import termColor
 
-VERSION = "2.5.4"
+VERSION = "2.5.5"
 
 # --- CONSTANTS and GLOBALS ---
 LOG_LEVELS = "VDIWEF"
 LOG_LEVELS_MAP = {level: index for index, level in enumerate(LOG_LEVELS)}
 
-LAST_USED = [RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN]
+LAST_USED = [
+    RED,
+    BLUE,
+    CYAN,
+    GREEN,
+    YELLOW,
+    MAGENTA,
+]
 
 KNOWN_TAGS = {
-    "dalvikvm": WHITE,
-    "Process": WHITE,
-    "ActivityManager": WHITE,
-    "ActivityThread": WHITE,
-    "AndroidRuntime": CYAN,
     "jdwp": WHITE,
-    "StrictMode": WHITE,
     "DEBUG": YELLOW,
+    "Process": WHITE,
+    "dalvikvm": WHITE,
+    "StrictMode": WHITE,
+    "AndroidRuntime": CYAN,
+    "ActivityThread": WHITE,
+    "ActivityManager": WHITE,
 }
+
+SYSTEM_TAGS = [
+    r"Tile",
+    r"HWUI",
+    r"skia",
+    r"libc",
+    r"libEGL",
+    r"Dialog",
+    r"VRI\[.*?\]",
+    r"AudioTrack",
+    r"ImeTracker",
+    r"FrameEvents",
+    r"ViewRootImpl",
+    r"WindowManager",
+    r"OverlayHandler",
+    r"ActivityThread",
+    r"SurfaceControl",
+    r"VelocityTracker",
+    r"OplusBracketLog",
+    r"PipelineWatcher",
+    r"AppWidgetManager",
+    r"BLASTBufferQueue",
+    r"InsetsController",
+    r"AppWidgetHostView",
+    r"ViewRootImplExtImpl",
+    r"BufferQueueConsumer",
+    r"BufferQueueProducer",
+    r"OplusCursorFeedback",
+    r"BufferPoolAccessor.*?",
+    r"OplusViewDebugManager",
+    r"WindowOnBackDispatcher",
+    r"OplusScrollToTopManager",
+    r"ResourcesManagerExtImpl",
+    r"DynamicFramerate\s*\[.*?\]",
+    r"OplusViewDragTouchViewHelper",
+    r"oplus\.android\.OplusFrameworkFactoryImpl",
+]
 
 NO_COLOR = re.compile(r"\033\[.*?m")
 BACKTRACE_LINE = re.compile(r"^#(.*?)pc\s(.*?)$")
@@ -88,23 +132,24 @@ class Args:
     """Configuration for logcat filtering and display."""
 
     package: List[str]
-    tagWidth: int = 20
-    packageWidth: int = 20
-    minLevel: str = "V"
-    showPackage: bool = False
-    deviceSerial: Optional[str] = None
+    all: bool = False
+    keepLogcat: bool = False
     useDevice: bool = False
     useEmulator: bool = False
-    keepLogcat: bool = False
-    tag: Optional[List[str]] = None
-    ignoredTag: Optional[List[str]] = None
-    all: bool = False
-    output: str = ""
-    regex: Optional[str] = None
     colorGC: bool = False
     noColor: bool = False
+    showPackage: bool = False
     alwaysShowTags: bool = False
     currentApp: bool = False
+    ignoreSystemTags: bool = False
+    tag: Optional[List[str]] = None
+    ignoreTag: Optional[List[str]] = None
+    minLevel: str = "V"
+    regex: Optional[str] = None
+    tagWidth: int = 20
+    packageWidth: int = 20
+    deviceSerial: Optional[str] = None
+    output: str = ""
 
 
 def getConsoleWidth() -> int:
@@ -147,8 +192,6 @@ def indentWrap(message: str, width: int, headerSize: int) -> str:
 
 def allocateColor(tag: str) -> int:
     """Allocates a unique color for a tag based on LRU."""
-
-    global KNOWN_TAGS, LAST_USED
 
     if tag not in KNOWN_TAGS:
         KNOWN_TAGS[tag] = LAST_USED[0]
@@ -337,9 +380,15 @@ def createArgParser() -> argparse.ArgumentParser:
         add_help=False,
         prog=Path(sys.argv[0]).stem,
         description="A colorized Android logcat viewer with advanced filtering capabilities.",
+        formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    parser.add_argument("package", nargs="*", help="Application package name(s)")
+    parser.add_argument(
+        metavar="package(s)",
+        dest="package",
+        nargs="*",
+        help="Application package name(s)\nThis can be specified multiple times",
+    )
 
     parser.add_argument(
         "-h",
@@ -348,7 +397,6 @@ def createArgParser() -> argparse.ArgumentParser:
         default=argparse.SUPPRESS,
         help="Show this help message and exit.",
     )
-
     parser.add_argument(
         "-v",
         "--version",
@@ -357,26 +405,12 @@ def createArgParser() -> argparse.ArgumentParser:
         help="Print the version number and exit",
     )
     parser.add_argument(
-        "-p",
-        "--show-package",
-        dest="showPackage",
+        "-a",
+        "--all",
+        dest="all",
         action="store_true",
         default=False,
-        help="Filter output by specified package/process name(s)",
-    )
-    parser.add_argument(
-        "-d",
-        "--device",
-        dest="useDevice",
-        action="store_true",
-        help="Use first device for log input (adb -d option)",
-    )
-    parser.add_argument(
-        "-e",
-        "--emulator",
-        dest="useEmulator",
-        action="store_true",
-        help="Use first emulator for log input (adb -e option)",
+        help="Print log messages from all packages, default: %(default)s",
     )
     parser.add_argument(
         "-k",
@@ -384,14 +418,72 @@ def createArgParser() -> argparse.ArgumentParser:
         dest="keepLogcat",
         action="store_true",
         default=False,
-        help="Keep the entire log before running",
+        help="Keep the entire log before running, default: %(default)s",
     )
     parser.add_argument(
-        "-a",
-        "--all",
-        dest="all",
+        "-d",
+        "--device",
+        dest="useDevice",
         action="store_true",
-        help="Print all log messages (disables package filter)",
+        default=False,
+        help="Use first device for log input, default: %(default)s",
+    )
+    parser.add_argument(
+        "-e",
+        "--emulator",
+        dest="useEmulator",
+        action="store_true",
+        default=False,
+        help="Use first emulator for log input, default: %(default)s",
+    )
+    parser.add_argument(
+        "-g",
+        "--color-gc",
+        dest="colorGC",
+        action="store_true",
+        default=False,
+        help="Color garbage collection, default: %(default)s",
+    )
+    parser.add_argument(
+        "-N",
+        "--no-color",
+        dest="noColor",
+        action="store_true",
+        default=False,
+        help="Disable colors, default: %(default)s",
+    )
+    parser.add_argument(
+        "-p",
+        "--show-package",
+        dest="showPackage",
+        action="store_true",
+        default=False,
+        help="Show package name in output, default: %(default)s",
+    )
+    parser.add_argument(
+        "-S",
+        "--always-show-tags",
+        dest="alwaysShowTags",
+        action="store_true",
+        default=False,
+        help="Always show the tag name, default: %(default)s",
+    )
+    parser.add_argument(
+        "-c",
+        "--current",
+        dest="currentApp",
+        action="store_true",
+        default=False,
+        help="Filter logcat by current running app, default: %(default)s",
+    )
+    parser.add_argument(
+        "-I",
+        "--ignore-system-tags",
+        dest="ignoreSystemTags",
+        action="store_true",
+        default=False,
+        help="Filter output by ignoring known system tags, default: %(default)s"
+        "\nUse --ignore-tag to ignore additional tags if needed",
     )
     parser.add_argument(
         "-t",
@@ -399,33 +491,15 @@ def createArgParser() -> argparse.ArgumentParser:
         metavar="TAG",
         dest="tag",
         action="append",
-        help="Filter output by specified tag(s)",
+        help="Filter output by specified tag(s)\nThis can be specified multiple times, or as a comma separated list",
     )
     parser.add_argument(
         "-i",
         "--ignore-tag",
         metavar="IGNORED_TAG",
-        dest="ignoredTag",
+        dest="ignoreTag",
         action="append",
-        help="Filter output by ignoring specified tag(s)",
-    )
-    parser.add_argument(
-        "-m",
-        "--tag-width",
-        metavar="M",
-        dest="tagWidth",
-        type=int,
-        default=20,
-        help="Width of tag column",
-    )
-    parser.add_argument(
-        "-n",
-        "--package-width",
-        metavar="N",
-        dest="packageWidth",
-        type=int,
-        default=20,  # Defaulting to the old fixed width
-        help="Width of package/process name column",
+        help="Filter output by ignoring specified tag(s)\nThis can be specified multiple times, or as a comma separated list",
     )
     parser.add_argument(
         "-l",
@@ -435,53 +509,49 @@ def createArgParser() -> argparse.ArgumentParser:
         type=str,
         choices=LOG_LEVELS + LOG_LEVELS.lower(),
         default="V",
-        help="Minimum level to be displayed",
+        help="Filter messages lower than minimum log level, default: %(default)s",
+    )
+    parser.add_argument(
+        "-r",
+        "--regex",
+        metavar="REGEX",
+        dest="regex",
+        type=str,
+        help="Filter output messages using the specified %(metavar)s",
+    )
+    parser.add_argument(
+        "-m",
+        "--tag-width",
+        metavar="M",
+        dest="tagWidth",
+        type=int,
+        default=20,
+        help="Width of tag column, default: %(default)s",
+    )
+    parser.add_argument(
+        "-n",
+        "--package-width",
+        metavar="N",
+        dest="packageWidth",
+        type=int,
+        default=20,
+        help="Width of package/process name column, default: %(default)s",
     )
     parser.add_argument(
         "-s",
         "--serial",
         metavar="DEVICE_SERIAL",
         dest="deviceSerial",
-        help="Device serial number (adb -s option)",
+        help="Device serial number",
     )
     parser.add_argument(
         "-o",
         "--output",
+        metavar="FILE",
         dest="output",
         type=str,
         default="",
         help="Output filename",
-    )
-    parser.add_argument(
-        "-r",
-        "--regex",
-        dest="regex",
-        type=str,
-        help="Print only when matches REGEX (passed to logcat -e REGEX)",
-    )
-    parser.add_argument(
-        "--color-gc",
-        dest="colorGC",
-        action="store_true",
-        help="Color garbage collection",
-    )
-    parser.add_argument(
-        "--no-color",
-        dest="noColor",
-        action="store_true",
-        help="Disable colors",
-    )
-    parser.add_argument(
-        "--always-show-tags",
-        dest="alwaysShowTags",
-        action="store_true",
-        help="Always display the tag name",
-    )
-    parser.add_argument(
-        "--current",
-        dest="currentApp",
-        action="store_true",
-        help="Filter logcat by current running app",
     )
 
     return parser
@@ -567,7 +637,7 @@ def processLogLine(line: str, state: State, args: Args, colorConfig: ColorConfig
     if level in LOG_LEVELS_MAP and LOG_LEVELS_MAP[level] < minLevel:
         return
 
-    if args.ignoredTag and isTagInTags(tag, args.ignoredTag):
+    if args.ignoreTag and isTagInTags(tag, args.ignoreTag):
         return
 
     if args.tag and not isTagInTags(tag, args.tag):
@@ -678,11 +748,17 @@ def main() -> None:
 
     args = Args(**vars(args))
 
+    if args.ignoreSystemTags:
+        ignoredSystemTags = []
+        for systemTag in SYSTEM_TAGS:
+            ignoredSystemTags.append(f"^{systemTag}$")
+        args.ignoreTag = ignoredSystemTags
+
     if args.tag:
         args.tag = [tag.strip() for tag_arg in args.tag for tag in tag_arg.split(",")]
 
-    if args.ignoredTag:
-        args.ignoredTag = [tag.strip() for tag_arg in args.ignoredTag for tag in tag_arg.split(",")]
+    if args.ignoreTag:
+        args.ignoreTag = [tag.strip() for tag_arg in args.ignoreTag for tag in tag_arg.split(",")]
 
     minLevel = LOG_LEVELS_MAP[args.minLevel.upper()]
     consoleWidth = getConsoleWidth()
