@@ -207,7 +207,7 @@ Shows all logs from `com.example.myapp` with colorized output.
 ### Example 2: Multiple Tags with Custom Width
 
 ```bash
-pidcat com.example.myapp -t Network -t Database -pw 30 -w 25
+pidcat com.example.myapp -t Network -t Database -m 25 -n 30
 ```
 
 Shows logs with `Network` or `Database` tags, with 30-char package column and 25-char tag column.
@@ -399,7 +399,7 @@ Contributions are welcome! Here's how you can help:
 
 ## 📄 License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE.md) file for details.
+This project is licensed under the GNU General Public License 3.0 - see the [LICENSE](LICENSE.md) file for details.
 
 ```
                     GNU GENERAL PUBLIC LICENSE
