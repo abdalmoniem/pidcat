@@ -3,6 +3,7 @@ import sys
 import glob
 import shutil
 import argparse
+import threading
 import subprocess
 
 from subprocess import PIPE
@@ -10,8 +11,17 @@ from subprocess import PIPE
 from pathlib import Path
 from dataclasses import dataclass
 
+from io import TextIOWrapper
+from typing import TextIO, cast
+
 from terminalColors import RED
 from terminalColors import colorize
+
+sysStdout = cast(TextIOWrapper, sys.stdout)
+sysStderr = cast(TextIOWrapper, sys.stderr)
+
+sysStdout.reconfigure(encoding="utf-8")
+sysStderr.reconfigure(encoding="utf-8")
 
 __version__ = "2.5.4"
 
@@ -224,20 +234,64 @@ def clean():
 def runCommand(command: list[str], errorMessage: str | None = None) -> None:
     """Runs a command using subprocess and handles errors."""
 
+    stderr = []
+
+    def streamReader(pipe: TextIO, file: TextIO) -> None:
+        """Reads lines from a pipe and prints them with a prefix."""
+        with pipe:
+            for line in iter(pipe.readline, ""):
+                if file == sys.stderr:
+                    stderr.append(line.strip())
+                    error = colorize(f"[!] {line.strip()}", foreground=RED)
+                    print(error, file=file, flush=True)
+                else:
+                    print(f"[*] {line.strip()}", file=file, flush=True)
+
     def printException(message: str) -> None:
-        if errorMessage is not None:
+        """Prints an exception message with optional errorMessage prefix."""
+        if errorMessage:
             error = colorize(f"[!] {errorMessage}: {message}", foreground=RED)
-            print(error, file=sys.stderr)
+        else:
+            error = colorize(f"[!] {message}", foreground=RED)
+
+        print(error, file=sys.stderr)
 
     try:
-        pid = subprocess.Popen(command, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        _, stderr = pid.communicate()
+        pid = subprocess.Popen(
+            command,
+            stdout=PIPE,
+            stderr=PIPE,
+            text=True,  # Automatically decode bytes to strings
+            bufsize=1,  # Line buffered
+            universal_newlines=True,
+        )
+
+        assert pid.stdout and pid.stderr
+
+        stdoutThread = threading.Thread(target=streamReader, args=(pid.stdout, sys.stdout))
+        stderrThread = threading.Thread(target=streamReader, args=(pid.stderr, sys.stderr))
+
+        stdoutThread.start()
+        stderrThread.start()
+
+        pid.wait()
+
+        stdoutThread.join()
+        stderrThread.join()
 
         if pid.returncode != 0:
             erroneousCommand = " ".join(command)
-            raise subprocess.CalledProcessError(pid.returncode, erroneousCommand, stderr=stderr.decode().strip())
+            raise subprocess.CalledProcessError(pid.returncode, erroneousCommand, stderr="\n".join(stderr))
 
+    except KeyboardInterrupt:
+        error = colorize("\nProcess interrupted by user", foreground=RED)
+        print(error, file=sys.stderr)
+
+        sys.exit(0)
     except subprocess.CalledProcessError as ex:
+        error = colorize("\nERRORS:", foreground=RED)
+        print(error, file=sys.stderr)
+
         printException(str(ex))
 
         for line in ex.stderr.splitlines():
@@ -292,16 +346,9 @@ def runBuildInstaller(args: Args):
 
 def runInstaller():
     installerPath = str(max(glob.glob("setup/Output/*.exe"), key=os.path.getmtime))
+    command = [installerPath]
 
-    try:
-        subprocess.run([installerPath])
-    except subprocess.CalledProcessError as ex:
-        error = colorize(
-            f"[!] Error occurred while running installer: {ex}",
-            foreground=RED,
-        )
-        print(error, file=sys.stderr)
-        sys.exit(ex.returncode)
+    runCommand(command=command, errorMessage="Error occurred while running installer")
 
 
 def main() -> None:

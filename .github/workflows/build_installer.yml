@@ -31,7 +31,7 @@ jobs:
         run: uv sync
 
       - name: Build Executable
-        run: uv run build.py
+        run: uv run build.py -e
 
       - name: Build Installer
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
