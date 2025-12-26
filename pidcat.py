@@ -29,7 +29,7 @@ from terminalColors import MAGENTA
 from terminalColors import colorize
 from terminalColors import termColor
 
-__version__ = "2.5.4"
+VERSION = "2.5.4"
 
 # --- CONSTANTS and GLOBALS ---
 LOG_LEVELS = "VDIWEF"
@@ -56,8 +56,8 @@ PID_KILL = re.compile(r"^Killing (\d+):([a-zA-Z0-9._:]+)/[^:]+: (.*)$")
 PID_LEAVE = re.compile(r"^No longer want ([a-zA-Z0-9._:]+) \(pid (\d+)\): .*$")
 PID_DEATH = re.compile(r"^Process ([a-zA-Z0-9._:]+) \(pid (\d+)\) has died.?$")
 PID_LINE = re.compile(r"^\w+\s+(\w+)\s+\w+\s+\w+\s+\w+\s+\w+\s+\w+\s+\w\s([\w|\.|\/]+)$")
-PID_START_5_1 = re.compile(r"^.*: Start proc (\d+):([a-zA-Z0-9._:]+)/[a-z0-9]+ for (.*)$")
-PID_START = re.compile(r"^.*: Start proc ([a-zA-Z0-9._:]+) for ([a-z]+ [^:]+): pid=(\d+) uid=(\d+) gids=(.*)$")
+PID_START = re.compile(r"^.*: Start proc (\d+):([a-zA-Z0-9._:]+)/[a-z0-9]+ for (.*)$")
+PID_START_W_UGID = re.compile(r"^.*: Start proc ([a-zA-Z0-9._:]+) for ([a-z]+ [^:]+): pid=(\d+) uid=(\d+) gids=(.*)$")
 PID_START_DALVIK = re.compile(r"^E/dalvikvm\(\s*(\d+)\): >>>>> ([a-zA-Z0-9._:]+) \[ userId:0 \| appId:(\d+) \]$")
 CURRENT_PACKAGE = re.compile(r"VisibleActivityProcess\:\[\s*ProcessRecord\{\w+\s*\d+\:(.*?)\/\w+\}\]")
 
@@ -307,18 +307,18 @@ def parseProcDeath(
 def parseProcStart(line: str) -> Optional[Tuple[str, str, str, str, str]]:
     """Parses log lines for process start."""
 
-    for regex in (PID_START_5_1, PID_START, PID_START_DALVIK):
+    for regex in (PID_START, PID_START_W_UGID, PID_START_DALVIK):
         match = regex.match(line)
 
         if match:
-            if regex == PID_START_5_1:
+            if regex == PID_START:
                 linePid: str
                 linePackage: str
                 target: str
                 linePid, linePackage, target = match.groups()
 
                 return linePackage, target, linePid, "", ""
-            elif regex == PID_START:
+            elif regex == PID_START_W_UGID:
                 linePackage, target, linePid, lineUid, lineGids = match.groups()
 
                 return linePackage, target, linePid, lineUid, lineGids
@@ -353,7 +353,7 @@ def createArgParser() -> argparse.ArgumentParser:
         "-v",
         "--version",
         action="version",
-        version=f"{Path(parser.prog).stem} v{__version__}",
+        version=f"{Path(parser.prog).stem} v{VERSION}",
         help="Print the version number and exit",
     )
     parser.add_argument(

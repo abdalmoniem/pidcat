@@ -23,7 +23,7 @@ sysStderr = cast(TextIOWrapper, sys.stderr)
 sysStdout.reconfigure(encoding="utf-8")
 sysStderr.reconfigure(encoding="utf-8")
 
-__version__ = "2.5.4"
+VERSION = "2.5.4"
 
 TAB_WIDTH = 4
 TAB_CHAR = " " * TAB_WIDTH
@@ -91,7 +91,7 @@ def createArgParser() -> argparse.ArgumentParser:
         "-v",
         "--version",
         action="version",
-        version=f"{Path(parser.prog).stem} v{__version__}",
+        version=f"{Path(parser.prog).stem} v{VERSION}",
         help="Print the version number and exit",
     )
 
@@ -179,8 +179,8 @@ def updateMainScriptVersion():
         fileDescriptor.truncate()
 
         for line in lines:
-            if line.strip().startswith("__version__"):
-                fileDescriptor.write(f'__version__ = "{__version__}"\n')
+            if line.strip().startswith("VERSION"):
+                fileDescriptor.write(f'VERSION = "{VERSION}"\n')
             else:
                 fileDescriptor.write(line)
 
@@ -194,13 +194,13 @@ def updateSetupScriptVersion():
 
         for line in lines:
             if line.strip().startswith("#define AppVersion"):
-                fileDescriptor.write(f'#define AppVersion "{__version__}"\n')
+                fileDescriptor.write(f'#define AppVersion "{VERSION}"\n')
             else:
                 fileDescriptor.write(line)
 
 
 def updateVersionInfoScriptVersion():
-    versionParts = __version__.split(".")
+    versionParts = VERSION.split(".")
     versionTuple = tuple(int(versionPart) for versionPart in versionParts) + (0,) * (4 - len(versionParts))
 
     with open(file=versionInfoScript, mode="r+", encoding="utf-8") as fileDescriptor:
@@ -216,11 +216,11 @@ def updateVersionInfoScriptVersion():
                 fileDescriptor.write(f"{TAB_CHAR}prodvers={versionTuple},\n")
             elif 'StringStruct("FileVersion"' in line:
                 fileDescriptor.write(
-                    f'{TAB_CHAR * 6}StringStruct("FileVersion", "{__version__}"),  # Matches "File version"\n'
+                    f'{TAB_CHAR * 6}StringStruct("FileVersion", "{VERSION}"),  # Matches "File version"\n'
                 )
             elif 'StringStruct("ProductVersion"' in line:
                 fileDescriptor.write(
-                    f'{TAB_CHAR * 6}StringStruct("ProductVersion", "{__version__}"),  # Matches "Product version"\n'
+                    f'{TAB_CHAR * 6}StringStruct("ProductVersion", "{VERSION}"),  # Matches "Product version"\n'
                 )
             else:
                 fileDescriptor.write(line)
@@ -362,7 +362,7 @@ def main() -> None:
         args.buildExecutable = True
         args.buildInstaller = True
 
-    print(f"[*] Building PidCat v{__version__}...")
+    print(f"[*] Building PidCat v{VERSION}...")
 
     print("[*] Updating version information...")
     updateMainScriptVersion()

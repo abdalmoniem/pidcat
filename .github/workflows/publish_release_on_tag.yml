@@ -1,16 +1,15 @@
-#file: noinspection Annotator
 name: Publish Release On Tag
 run-name: ${{ github.workflow }} ${{ github.ref_name }} ${{ github.event.repository.updated_at}}
 
 on:
   push:
     tags:
-      - 'v[0-9]+'
-      - 'v[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+.[0-9]+'
+      - "v[0-9]+"
+      - "v[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+.[0-9]+"
 
-permissions: { }
+permissions: {}
 
 jobs:
   publish-release-on-tag:
@@ -75,60 +74,7 @@ jobs:
           fromTag: ${{ env.PREVIOUS_TAG }}
           toTag: ${{ github.ref_name }}
           token: ${{ secrets.RELEASE_GITHUB_TOKEN }}
-          configurationJson: |
-            {
-              template: '#{{CHANGELOG}}',
-              ignore_labels: ['ignore'],
-              categories: [
-                {
-                  title: '## 🚀 Features',
-                  labels: ['feat', 'feature']
-                },
-                {
-                  title: '## 🐛 Fixes',
-                  labels: ['fix']
-                },
-                {
-                  title: '## ⚡ Performance Improvements',
-                  labels: ['perf']
-                },
-                {
-                  title: '## ♻️ Refactors',
-                  labels: ['refactor']
-                },
-                {
-                  title: '## 🎨 Code Style',
-                  labels: ['style']
-                },
-                {
-                  title: '## 📚 Documentation',
-                  labels: ['docs']
-                },
-                {
-                  title: '## 🧪 Tests',
-                  labels: ['test']
-                },
-                {
-                  title: '## ⏪ Reverts',
-                  labels: ['revert']
-                },
-                {
-                  title: '## 🛠️ Maintenance',
-                  labels: ['chore', 'ci', 'build']
-                },
-                {
-                  title: '## 📦 Other',
-                  labels: []
-                }
-              ],
-              "label_extractor": [
-                {
-                  "pattern": "^(feat|feature|fix|perf|refactor|style|docs|test|revert|chore|ci|build){1}(\\([\\w\\-\\.]+\\))?(!)?: ([\\w ])+([\\s\\S]*)",
-                  "on_property": "title",
-                  "target": "$1"
-                }
-              ]
-            }
+          configuration: "changelog_config.json"
 
       - name: Publish Release ${{ github.ref_name }}
         uses: svenstaro/upload-release-action@v2

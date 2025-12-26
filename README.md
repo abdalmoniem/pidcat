@@ -265,7 +265,7 @@ Shows Info level and above, ignoring tags containing "Chatty" or "Verbose".
 
 ### Build Steps
 
-1. **Update Version** - Edit `build.py` and set the `__version__` variable
+1. **Update Version** - Edit `build.py` and set the `VERSION` variable
 
 2. **Run Build Script**
 
