@@ -57,7 +57,7 @@ PID_LEAVE = re.compile(r"^No longer want ([a-zA-Z0-9._:]+) \(pid (\d+)\): .*$")
 PID_DEATH = re.compile(r"^Process ([a-zA-Z0-9._:]+) \(pid (\d+)\) has died.?$")
 PID_LINE = re.compile(r"^\w+\s+(\w+)\s+\w+\s+\w+\s+\w+\s+\w+\s+\w+\s+\w\s([\w|\.|\/]+)$")
 PID_START = re.compile(r"^.*: Start proc (\d+):([a-zA-Z0-9._:]+)/[a-z0-9]+ for (.*)$")
-PID_START_W_UGID = re.compile(r"^.*: Start proc ([a-zA-Z0-9._:]+) for ([a-z]+ [^:]+): pid=(\d+) uid=(\d+) gids=(.*)$")
+PID_START_UGID = re.compile(r"^.*: Start proc ([a-zA-Z0-9._:]+) for ([a-z]+ [^:]+): pid=(\d+) uid=(\d+) gids=(.*)$")
 PID_START_DALVIK = re.compile(r"^E/dalvikvm\(\s*(\d+)\): >>>>> ([a-zA-Z0-9._:]+) \[ userId:0 \| appId:(\d+) \]$")
 CURRENT_PACKAGE = re.compile(r"VisibleActivityProcess\:\[\s*ProcessRecord\{\w+\s*\d+\:(.*?)\/\w+\}\]")
 
@@ -307,7 +307,7 @@ def parseProcDeath(
 def parseProcStart(line: str) -> Optional[Tuple[str, str, str, str, str]]:
     """Parses log lines for process start."""
 
-    for regex in (PID_START, PID_START_W_UGID, PID_START_DALVIK):
+    for regex in (PID_START, PID_START_UGID, PID_START_DALVIK):
         match = regex.match(line)
 
         if match:
@@ -318,7 +318,7 @@ def parseProcStart(line: str) -> Optional[Tuple[str, str, str, str, str]]:
                 linePid, linePackage, target = match.groups()
 
                 return linePackage, target, linePid, "", ""
-            elif regex == PID_START_W_UGID:
+            elif regex == PID_START_UGID:
                 linePackage, target, linePid, lineUid, lineGids = match.groups()
 
                 return linePackage, target, linePid, lineUid, lineGids

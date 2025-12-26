@@ -43,7 +43,19 @@ versionInfoScript = os.path.join(projectRoot, "resources", "version_info.py")
 
 @dataclass
 class Args:
-    """Args for the build script."""
+    """
+    Holds the command-line arguments for the build script.
+
+    Attributes:
+        buildExecutable (bool): build the executable package
+        buildInstaller (bool): build the installer package
+        clean (bool): clean generated files
+        rebuild (bool): rebuild the executable package
+        buildAll (bool): build both the executable and installer packages
+        install (bool): install after building
+        reinstall (bool): rebuild, build installer, and install
+        isccPath (str): path to the Inno Setup Compiler (iscc.exe)
+    """
 
     buildExecutable: bool = False
     """build the executable package"""
@@ -171,7 +183,13 @@ def createArgParser() -> argparse.ArgumentParser:
     return parser
 
 
-def updateMainScriptVersion():
+def updateMainScriptVersion() -> None:
+    """
+    Updates the version string in the main script file.
+
+    This function reads the main script file, updates the version string, and writes the updated content back to the file.
+    """
+
     with open(file=mainScript, mode="r+", encoding="utf-8") as fileDescriptor:
         lines = fileDescriptor.readlines()
 
@@ -185,7 +203,13 @@ def updateMainScriptVersion():
                 fileDescriptor.write(line)
 
 
-def updateSetupScriptVersion():
+def updateSetupScriptVersion() -> None:
+    """
+    Updates the version string in the setup script file.
+
+    This function reads the setup script file, updates the version string, and writes the updated content back to the file.
+    """
+
     with open(file=setupScript, mode="r+", encoding="utf-8") as fileDescriptor:
         lines = fileDescriptor.readlines()
 
@@ -199,7 +223,13 @@ def updateSetupScriptVersion():
                 fileDescriptor.write(line)
 
 
-def updateVersionInfoScriptVersion():
+def updateVersionInfoScriptVersion() -> None:
+    """
+    Updates the version string in the version info script file.
+
+    This function reads the version info script file, updates the version string, and writes the updated content back to the file.
+    """
+
     versionParts = VERSION.split(".")
     versionTuple = tuple(int(versionPart) for versionPart in versionParts) + (0,) * (4 - len(versionParts))
 
@@ -226,18 +256,40 @@ def updateVersionInfoScriptVersion():
                 fileDescriptor.write(line)
 
 
-def clean():
+def clean() -> None:
+    """
+    Cleans up generated files and directories.
+
+    This function deletes the generated files and directories, without throwing an error if they do not exist.
+    """
     shutil.rmtree(path="generated", ignore_errors=True)
     shutil.rmtree(path="setup/Output", ignore_errors=True)
 
 
 def runCommand(command: list[str], errorMessage: str | None = None) -> None:
-    """Runs a command using subprocess and handles errors."""
+    """
+    Runs a command and prints its output.
+
+    Arguments:
+        command (list[str]): The command to run.
+        errorMessage (str | None, optional): An error message to print if the command fails. Defaults to None.
+    """
 
     stderr = []
 
     def streamReader(pipe: TextIO, file: TextIO) -> None:
-        """Reads lines from a pipe and prints them with a prefix."""
+        """
+        Streams the output of a pipe to a file.
+
+        This function reads the output of a pipe and prints it to a file, with optional colorization.
+        If the file is sys.stderr, the output is colored red and prefixed with "[!] ".
+        If the file is not sys.stderr, the output is colored green and prefixed with "[*] ".
+
+        Arguments:
+            pipe (TextIO): The pipe to read from.
+            file (TextIO): The file to print the output to.
+        """
+
         with pipe:
             for line in iter(pipe.readline, ""):
                 if file == sys.stderr:
@@ -248,7 +300,15 @@ def runCommand(command: list[str], errorMessage: str | None = None) -> None:
                     print(f"[*] {line.strip()}", file=file, flush=True)
 
     def printException(message: str) -> None:
-        """Prints an exception message with optional errorMessage prefix."""
+        """
+        Prints an error message to sys.stderr, with optional colorization.
+
+        If errorMessage is provided, it is prefixed to the error message.
+
+        Arguments:
+            message (str): The error message to print.
+        """
+
         if errorMessage:
             error = colorize(f"[!] {errorMessage}: {message}", foreground=RED)
         else:
@@ -301,7 +361,13 @@ def runCommand(command: list[str], errorMessage: str | None = None) -> None:
         sys.exit(ex.returncode)
 
 
-def runPyInstaller():
+def runPyInstaller() -> None:
+    """
+    Builds the PyInstaller executable.
+
+    This function runs the PyInstaller command with the necessary arguments to build the executable.
+    """
+
     command = [
         "pyinstaller",
         "--onefile",
@@ -318,7 +384,16 @@ def runPyInstaller():
     runCommand(command=command, errorMessage="Error occurred while building executable")
 
 
-def runBuildInstaller(args: Args):
+def runBuildInstaller(args: Args) -> None:
+    """
+    Builds the Inno Setup installer.
+
+    This function runs the Inno Setup compiler command with the necessary arguments to build the installer.
+
+    Arguments:
+        args (Args): The parsed command-line arguments.
+    """
+
     isccPath = "iscc" if not args.isccPath else args.isccPath
     command = [isccPath, setupScript]
 
@@ -344,7 +419,14 @@ def runBuildInstaller(args: Args):
         sys.exit(ex.errno)
 
 
-def runInstaller():
+def runInstaller() -> None:
+    """
+    Runs the Inno Setup installer executable.
+
+    This function runs the Inno Setup installer executable generated by the buildInstaller function.
+    It searches for the latest installer executable in the setup/Output directory.
+    """
+
     installerPath = str(max(glob.glob("setup/Output/*.exe"), key=os.path.getmtime))
     command = [installerPath]
 
@@ -352,7 +434,13 @@ def runInstaller():
 
 
 def main() -> None:
-    """The main entry point of the script."""
+    """
+    Main entry point for the build script.
+
+    This function parses the command-line arguments, updates version information, and runs the necessary build steps.
+    It will clean the generated files, run PyInstaller, build the installer, install the application, reinstall the application, or run the installer based on the arguments provided.
+    """
+
     parser = createArgParser()
     args = parser.parse_args()
 
