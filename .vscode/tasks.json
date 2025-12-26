@@ -2,12 +2,12 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Inno Setup: Compile Script",
+      "label": "Build",
       "type": "process",
-      "command": "C:\\Users\\hifna\\AppData\\Local\\Programs\\Inno Setup 6\\ISCC.exe",
+      "command": "uvx",
       "args": [
-        // "${file}"
-        "setup/setup.iss"
+        "tomlscript",
+        "build"
       ],
       "presentation": {
         "reveal": "always",
@@ -15,7 +15,109 @@
       },
       "group": {
         "kind": "build",
-        "isDefault": true
+        "isDefault": false
+      }
+    },
+    {
+      "label": "Clean",
+      "type": "process",
+      "command": "uvx",
+      "args": [
+        "tomlscript",
+        "clean"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "echo": false
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "Rebuild",
+      "type": "process",
+      "command": "uvx",
+      "args": [
+        "tomlscript",
+        "rebuild"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "echo": false
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "Build Installer",
+      "type": "process",
+      "command": "uvx",
+      "args": [
+        "tomlscript",
+        "build-installer"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "echo": false
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "Build All",
+      "type": "process",
+      "command": "uvx",
+      "args": [
+        "tomlscript",
+        "build-all"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "echo": false
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "Install",
+      "type": "process",
+      "command": "uvx",
+      "args": [
+        "tomlscript",
+        "install"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "echo": false
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "Reinstall",
+      "type": "process",
+      "command": "uvx",
+      "args": [
+        "tomlscript",
+        "reinstall"
+      ],
+      "presentation": {
+        "reveal": "always",
+        "echo": false
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
       }
     }
   ]

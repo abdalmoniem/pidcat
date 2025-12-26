@@ -6,17 +6,35 @@ import subprocess
 
 from pathlib import Path
 from dataclasses import dataclass
-from subprocess import PIPE, Popen
-from typing import List, Dict, Set, Optional, Tuple, TextIO
 
-__version__ = "2.5.3"
+from subprocess import PIPE
+from subprocess import Popen
+
+from typing import Set
+from typing import List
+from typing import Dict
+from typing import Tuple
+from typing import TextIO
+from typing import Optional
+
+from terminalColors import RED
+from terminalColors import BLUE
+from terminalColors import CYAN
+from terminalColors import RESET
+from terminalColors import BLACK
+from terminalColors import GREEN
+from terminalColors import WHITE
+from terminalColors import YELLOW
+from terminalColors import MAGENTA
+from terminalColors import colorize
+from terminalColors import termColor
+
+__version__ = "2.5.4"
 
 # --- CONSTANTS and GLOBALS ---
 LOG_LEVELS = "VDIWEF"
 LOG_LEVELS_MAP = {level: index for index, level in enumerate(LOG_LEVELS)}
 
-RESET = "\033[0m"
-BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(8)
 LAST_USED = [RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN]
 
 KNOWN_TAGS = {
@@ -87,26 +105,6 @@ class Args:
     noColor: bool = False
     alwaysShowTags: bool = False
     currentApp: bool = False
-
-
-def termColor(foreground: Optional[int] = None, background: Optional[int] = None) -> str:
-    """Returns the ANSI escape code for terminal color."""
-
-    codes = []
-
-    if foreground is not None:
-        codes.append("3%d" % foreground)
-
-    if background is not None:
-        codes.append("10%d" % background)
-
-    return "\033[%sm" % ";".join(codes) if codes else ""
-
-
-def colorize(message: str, foreground: Optional[int] = None, background: Optional[int] = None) -> str:
-    """Wraps a message with ANSI color codes."""
-
-    return termColor(foreground, background) + message + RESET
 
 
 def getConsoleWidth() -> int:
@@ -336,11 +334,21 @@ def createArgParser() -> argparse.ArgumentParser:
     """Creates and returns the ArgumentParser instance."""
 
     parser = argparse.ArgumentParser(
+        add_help=False,
         prog=Path(sys.argv[0]).stem,
-        description="A colorized Android logcat viewer with advanced filtering capabilities."
+        description="A colorized Android logcat viewer with advanced filtering capabilities.",
     )
 
     parser.add_argument("package", nargs="*", help="Application package name(s)")
+
+    parser.add_argument(
+        "-h",
+        "--help",
+        action="help",
+        default=argparse.SUPPRESS,
+        help="Show this help message and exit.",
+    )
+
     parser.add_argument(
         "-v",
         "--version",

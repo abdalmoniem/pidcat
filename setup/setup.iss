@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define AppName "PidCat"
-#define AppVersion "2.5.3"
+#define AppVersion "2.5.4"
 #define AppPublisher "AbdElMoniem ElHifnawy"
 #define AppURL "https://abdalmoniem.github.io"
 #define AppExeName "PidCat.exe"
@@ -19,7 +19,6 @@ AppPublisher={#AppPublisher}
 AppPublisherURL={#AppURL}
 AppSupportURL={#AppURL}
 AppUpdatesURL={#AppURL}
-; DefaultDirName={autopf}\{#AppName}
 DefaultDirName={code:GetDefaultDirName}
 UninstallDisplayIcon={app}\{#AppExeName}
 ; "ArchitecturesAllowed=x64compatible" specifies that Setup cannot run
@@ -37,17 +36,13 @@ ChangesEnvironment=true
 ; Uncomment the following line to run in non administrative install mode (install for current user only).
 PrivilegesRequired=lowest
 ; PrivilegesRequiredOverridesAllowed=dialog
-OutputBaseFilename=PidCat_{#DateTime}
+OutputBaseFilename={#AppName}_v{#AppVersion}_{#DateTime}
 SetupIconFile=..\resources\icon.ico
 SolidCompression=yes
 WizardStyle=modern
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-
-[Messages]
-SetupAppTitle=Setup - {#AppName} v{#AppVersion}
-SetupWindowTitle=Setup - {#AppName} v{#AppVersion}
 
 [Files]
 Source: "..\generated\dist\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
@@ -213,7 +208,16 @@ end;
 
 // InitializeWizard is the correct place to create custom wizard pages.
 procedure InitializeWizard;
+var
+  Suffix: String;
 begin
+  if IsAdmin then
+    Suffix := '⁂ Admin'
+  else
+    Suffix := '⌂ ' + GetUserNameString();
+  
+  WizardForm.Caption := Format('Setup - {#AppName} v{#AppVersion} {#DateTime} (%s)', [Suffix]);
+  
   if IsAlreadyInstalled then begin
     CreateOptionsPage;
   end;
