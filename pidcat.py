@@ -62,33 +62,72 @@ SYSTEM_TAGS = [
     r"libc",
     r"libEGL",
     r"Dialog",
+    r"System",
+    r"OneTrace",
+    r"PreCache",
+    r"PlayCore",
+    r"BpBinder",
     r"VRI\[.*?\]",
     r"AudioTrack",
     r"ImeTracker",
+    r"cutils-dev",
+    r"JavaBinder",
     r"FrameEvents",
+    r"QualityInfo",
+    r"ViewExtract",
+    r"FirebaseApp",
+    r"AdrenoUtils",
     r"ViewRootImpl",
+    r"nativeloader",
     r"WindowManager",
     r"OverlayHandler",
     r"ActivityThread",
     r"SurfaceControl",
+    r"\[UAH_CLIENT\]",
+    r"DisplayManager",
+    r"AdrenoGLES-.*?",
     r"VelocityTracker",
     r"OplusBracketLog",
     r"PipelineWatcher",
     r"AppWidgetManager",
     r"BLASTBufferQueue",
     r"InsetsController",
+    r"FirebaseSessions",
+    r"ProfileInstaller",
+    r"ExtensionsLoader",
+    r"SurfaceSyncGroup",
+    r"DesktopModeFlags",
+    r"AppCompatDelegate",
+    r"AppWidgetProvider",
     r"AppWidgetHostView",
+    r"ApplicationLoaders",
+    r"OplusGraphicsEvent",
+    r"OplusAppHeapManager",
+    r"FirebaseCrashlytics",
+    r"FirebaseInitProvider"
     r"ViewRootImplExtImpl",
     r"BufferQueueConsumer",
     r"BufferQueueProducer",
     r"OplusCursorFeedback",
+    r"ViewRootImplExtImpl",
+    r"OplusActivityManager",
+    r"CompatChangeReporter",
+    r"SessionsDependencies",
+    r"OplusInputMethodUtil",
     r"BufferPoolAccessor.*?",
     r"OplusViewDebugManager",
     r"WindowOnBackDispatcher",
+    r"CompactWindowAppManager",
     r"OplusScrollToTopManager",
     r"ResourcesManagerExtImpl",
+    r"ScrollOptimizationHelper",
+    r"OplusActivityThreadExtImpl",
     r"DynamicFramerate\s*\[.*?\]",
     r"OplusViewDragTouchViewHelper",
+    r"OplusPredictiveBackController",
+    r"OplusSystemUINavigationGesture",
+    r"OplusInputMethodManagerInternal",
+    r"OplusCustomizeRestrictionManager",
     r"oplus\.android\.OplusFrameworkFactoryImpl",
 ]
 
@@ -103,7 +142,10 @@ PID_LINE = re.compile(r"^\w+\s+(\w+)\s+\w+\s+\w+\s+\w+\s+\w+\s+\w+\s+\w\s([\w|\.
 PID_START = re.compile(r"^.*: Start proc (\d+):([a-zA-Z0-9._:]+)/[a-z0-9]+ for (.*)$")
 PID_START_UGID = re.compile(r"^.*: Start proc ([a-zA-Z0-9._:]+) for ([a-z]+ [^:]+): pid=(\d+) uid=(\d+) gids=(.*)$")
 PID_START_DALVIK = re.compile(r"^E/dalvikvm\(\s*(\d+)\): >>>>> ([a-zA-Z0-9._:]+) \[ userId:0 \| appId:(\d+) \]$")
-CURRENT_PACKAGE = re.compile(r"VisibleActivityProcess\:\[\s*ProcessRecord\{\w+\s*\d+\:(.*?)\/\w+\}\]")
+VISIBLE_ACTIVITIES = re.compile(
+    r"VisibleActivityProcess\:\[\s*(?:(?:ProcessRecord\{\w+\s*\d+\:(?:[a-zA-Z.]+)\/\w+\})\s*)+\]"
+)
+VISIBLE_PACKAGES = re.compile(r"ProcessRecord\{\w+\s*\d+\:([a-zA-Z.]+)\/\w+\}")
 
 
 @dataclass
@@ -237,7 +279,7 @@ def getAdbCommand(args: Args) -> List[str]:
     return baseAdbCommand
 
 
-def getCurrentAppPackage(baseAdbCommand: List[str]) -> Optional[str]:
+def getCurrentAppPackage(baseAdbCommand: List[str]) -> Optional[List[str]]:
     """Gets the package name of the currently running app."""
 
     try:
@@ -250,9 +292,14 @@ def getCurrentAppPackage(baseAdbCommand: List[str]) -> Optional[str]:
 
         systemDump = subprocess.run(systemDumpCommand, stdout=PIPE, stderr=PIPE, text=True, errors="replace").stdout
 
-        match = re.search(CURRENT_PACKAGE, systemDump)
+        visibleActivities = re.search(VISIBLE_ACTIVITIES, systemDump)
 
-        return match.group(1) if match else None
+        if not visibleActivities:
+            return None
+
+        visiblePackages = re.findall(VISIBLE_PACKAGES, visibleActivities.group())
+
+        return visiblePackages if visiblePackages else None
     except Exception as ex:
         error = colorize(f"Error getting current app package: {ex}", foreground=RED)
         print(error, file=sys.stderr)
@@ -474,7 +521,7 @@ def createArgParser() -> argparse.ArgumentParser:
         dest="currentApp",
         action="store_true",
         default=False,
-        help="Filter logcat by current running app, default: %(default)s",
+        help="Filter logcat by current running app(s), default: %(default)s",
     )
     parser.add_argument(
         "-I",
@@ -772,9 +819,8 @@ def main() -> None:
         packages = list(set(args.package))
 
         if args.currentApp:
-            runningPackage = getCurrentAppPackage(baseAdbCommand)
-            if runningPackage:
-                packages.append(runningPackage)
+            runningPackages = getCurrentAppPackage(baseAdbCommand)
+            packages += runningPackages if runningPackages else []
 
         # Determine exact processes vs. catch-all packages
         catchallPackage = list(filter(lambda package: package.find(":") == -1, packages))
