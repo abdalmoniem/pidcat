@@ -1,4 +1,5 @@
 {
    "editor.rulers": [120],
-   "python.languageServer": "None"
+   "ty.disableLanguageServices": true
+   // "python.languageServer": "None"
 }
