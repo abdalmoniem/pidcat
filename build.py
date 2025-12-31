@@ -112,8 +112,8 @@ def createArgParser() -> argparse.ArgumentParser:
         "--build-executable",
         dest="buildExecutable",
         action="store_true",
-        default=False,
-        help="Build the executable using PyInstaller",
+        default=True,
+        help="Build the executable using PyInstaller, default: %(default)s",
     )
 
     parser.add_argument(
@@ -122,7 +122,7 @@ def createArgParser() -> argparse.ArgumentParser:
         dest="buildInstaller",
         action="store_true",
         default=False,
-        help="Build the installer using Inno Setup Compiler",
+        help="Build the installer using Inno Setup Compiler, default: %(default)s",
     )
 
     parser.add_argument(
@@ -131,7 +131,7 @@ def createArgParser() -> argparse.ArgumentParser:
         dest="clean",
         action="store_true",
         default=False,
-        help="Clean generated files",
+        help="Clean generated files, default: %(default)s",
     )
 
     parser.add_argument(
@@ -140,7 +140,7 @@ def createArgParser() -> argparse.ArgumentParser:
         dest="rebuild",
         action="store_true",
         default=False,
-        help="Rebuild the executable package",
+        help="Rebuild the executable package, default: %(default)s",
     )
 
     parser.add_argument(
@@ -149,7 +149,7 @@ def createArgParser() -> argparse.ArgumentParser:
         dest="buildAll",
         action="store_true",
         default=False,
-        help="Build both the executable and installer packages",
+        help="Build both the executable and installer packages, default: %(default)s",
     )
 
     parser.add_argument(
@@ -158,7 +158,7 @@ def createArgParser() -> argparse.ArgumentParser:
         dest="install",
         action="store_true",
         default=False,
-        help="Install the application by running the generated installer",
+        help="Install the application by running the generated installer, default: %(default)s",
     )
 
     parser.add_argument(
@@ -167,7 +167,7 @@ def createArgParser() -> argparse.ArgumentParser:
         dest="reinstall",
         action="store_true",
         default=False,
-        help="Rebuild, build installer, and install",
+        help="Rebuild, build installer, and install, default: %(default)s",
     )
 
     parser.add_argument(
@@ -176,8 +176,8 @@ def createArgParser() -> argparse.ArgumentParser:
         metavar="ISCC_PATH",
         dest="isccPath",
         action="store",
-        default="",
-        help="Path to Inno Setup Compiler (ISCC) executable",
+        default=None,
+        help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
     )
 
     return parser
