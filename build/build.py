@@ -14,8 +14,10 @@ from dataclasses import dataclass
 from io import TextIOWrapper
 from typing import TextIO, cast
 
-from terminalColors import RED
-from terminalColors import colorize
+sys.path.append(str(Path(__file__).parent.parent))
+
+from utils.terminalColors import RED
+from utils.terminalColors import colorize
 
 sysStdout = cast(TextIOWrapper, sys.stdout)
 sysStderr = cast(TextIOWrapper, sys.stderr)
@@ -23,26 +25,26 @@ sysStderr = cast(TextIOWrapper, sys.stderr)
 sysStdout.reconfigure(encoding="utf-8")
 sysStderr.reconfigure(encoding="utf-8")
 
-VERSION = "2.6.0"
+VERSION = "2.6.1"
 
 TAB_WIDTH = 4
 TAB_CHAR = " " * TAB_WIDTH
 
-scriptDir = os.path.dirname(os.path.abspath(__file__))
-
-projectRoot = scriptDir
-iconPath = os.path.join(projectRoot, "resources", "icon.png")
-versionPath = os.path.join(projectRoot, "resources", "version_info.py")
-workPath = os.path.join(projectRoot, "generated", "build")
-distPath = os.path.join(projectRoot, "generated", "dist")
-specPath = os.path.join(projectRoot, "generated")
-mainScript = os.path.join(projectRoot, "pidcat.py")
-setupScript = os.path.join(projectRoot, "setup", "setup.iss")
-versionInfoScript = os.path.join(projectRoot, "resources", "version_info.py")
+scriptDir = str(Path(__file__).parent)
+iconPath = str(Path(scriptDir).joinpath("resources", "icon.png"))
+versionPath = str(Path(scriptDir).joinpath("resources", "version_info.py"))
+workPath = str(Path(scriptDir).joinpath("generated", "build"))
+distPath = str(Path(scriptDir).joinpath("generated", "dist"))
+generatedPath = str(Path(scriptDir).joinpath("generated"))
+mainScript = str(Path(scriptDir).parent.joinpath("pidcat.py"))
+setupScriptPath = str(Path(scriptDir).joinpath("setup"))
+setupOutputPath = str(Path(setupScriptPath).joinpath("Output"))
+setupScript = str(Path(setupScriptPath).joinpath("setup.iss"))
+versionInfoScript = str(Path(scriptDir).joinpath("resources", "version_info.py"))
 
 
 @dataclass
-class Args:
+class CliArgs:
     """
     Holds the command-line arguments for the build script.
 
@@ -112,7 +114,7 @@ def createArgParser() -> argparse.ArgumentParser:
         "--build-executable",
         dest="buildExecutable",
         action="store_true",
-        default=True,
+        default=False,
         help="Build the executable using PyInstaller, default: %(default)s",
     )
 
@@ -256,14 +258,20 @@ def updateVersionInfoScriptVersion() -> None:
                 fileDescriptor.write(line)
 
 
+def updateVersions() -> None:
+    updateMainScriptVersion()
+    updateSetupScriptVersion()
+    updateVersionInfoScriptVersion()
+
+
 def clean() -> None:
     """
     Cleans up generated files and directories.
 
     This function deletes the generated files and directories, without throwing an error if they do not exist.
     """
-    shutil.rmtree(path="generated", ignore_errors=True)
-    shutil.rmtree(path="setup/Output", ignore_errors=True)
+    shutil.rmtree(path=generatedPath, ignore_errors=True)
+    shutil.rmtree(path=setupOutputPath, ignore_errors=True)
 
 
 def runCommand(command: list[str], errorMessage: str | None = None) -> None:
@@ -374,7 +382,7 @@ def runPyInstaller() -> None:
         "--console",
         f"--workpath={workPath}",
         f"--distpath={distPath}",
-        f"--specpath={specPath}",
+        f"--specpath={generatedPath}",
         f"--icon={iconPath}",
         f"--version-file={versionPath}",
         "--name=PidCat",
@@ -384,7 +392,7 @@ def runPyInstaller() -> None:
     runCommand(command=command, errorMessage="Error occurred while building executable")
 
 
-def runBuildInstaller(args: Args) -> None:
+def runBuildInstaller(args: CliArgs) -> None:
     """
     Builds the Inno Setup installer.
 
@@ -427,7 +435,7 @@ def runInstaller() -> None:
     It searches for the latest installer executable in the setup/Output directory.
     """
 
-    installerPath = str(max(glob.glob("setup/Output/*.exe"), key=os.path.getmtime))
+    installerPath = str(max(glob.glob(f"{setupOutputPath}/*.exe"), key=os.path.getmtime))
     command = [installerPath]
 
     runCommand(command=command, errorMessage="Error occurred while running installer")
@@ -444,7 +452,7 @@ def main() -> None:
     parser = createArgParser()
     args = parser.parse_args()
 
-    args = Args(**vars(args))
+    args = CliArgs(**vars(args))
 
     if args.buildAll:
         args.buildExecutable = True
@@ -453,9 +461,7 @@ def main() -> None:
     print(f"[*] Building PidCat v{VERSION}...")
 
     print("[*] Updating version information...")
-    updateMainScriptVersion()
-    updateSetupScriptVersion()
-    updateVersionInfoScriptVersion()
+    updateVersions()
 
     if args.clean:
         print("[*] Cleaning generated files...")
@@ -489,7 +495,12 @@ def main() -> None:
         print("[*] Running installer...")
         runInstaller()
 
-    print("[✓] Build complete!")
+    anyOptionSet = any(vars(args).values())
+
+    if anyOptionSet:
+        print("[✓] Build complete!")
+    else:
+        parser.print_help()
 
 
 if __name__ == "__main__":

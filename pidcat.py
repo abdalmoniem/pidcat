@@ -4,34 +4,38 @@ import shutil
 import argparse
 
 from pathlib import Path
-from dataclasses import dataclass
 
 from subprocess import PIPE
-from subprocess import Popen as ProcessOpen
 from subprocess import run as processRun
+from subprocess import Popen as ProcessOpen
 
 from typing import Set
 from typing import List
 from typing import Dict
 from typing import Tuple
-from typing import TextIO
 from typing import Optional
 
-from io import TextIOWrapper
+from model.State import State
+from model.CliArgs import CliArgs
+from model.MockTTY import MockTTY
 
-from terminalColors import RED
-from terminalColors import BLUE
-from terminalColors import CYAN
-from terminalColors import RESET
-from terminalColors import BLACK
-from terminalColors import GREEN
-from terminalColors import WHITE
-from terminalColors import YELLOW
-from terminalColors import MAGENTA
-from terminalColors import colorize
-from terminalColors import termColor
+from utils.terminalColors import RED
+from utils.terminalColors import BLUE
+from utils.terminalColors import CYAN
+from utils.terminalColors import RESET
+from utils.terminalColors import BLACK
+from utils.terminalColors import GREEN
+from utils.terminalColors import WHITE
+from utils.terminalColors import YELLOW
+from utils.terminalColors import MAGENTA
+from utils.terminalColors import colorize
+from utils.terminalColors import termColor
 
-VERSION = "2.6.0"
+from controller.Writer import Writer
+from controller.FileWriter import FileWriter
+from controller.ConsoleWriter import ConsoleWriter
+
+VERSION = "2.6.1"
 
 # --- CONSTANTS and GLOBALS ---
 LOG_LEVELS = "VDIWEF"
@@ -148,96 +152,6 @@ VISIBLE_ACTIVITIES = re.compile(
     r"VisibleActivityProcess\:\[\s*(?:(?:ProcessRecord\{\w+\s*\d+\:(?:[a-zA-Z.]+)\/\w+\})\s*)+\]"
 )
 VISIBLE_PACKAGES = re.compile(r"ProcessRecord\{\w+\s*\d+\:([a-zA-Z.]+)\/\w+\}")
-
-
-class MockTTY(ProcessOpen):
-    """
-    A mock object for ducktyping when reading from a pipe or file.
-
-    This class is used for ducktyping when reading from a pipe or file.
-    It only needs a working stdout for ducktyping, so it doesn't need to
-    follow the ProcessOpen signature.
-
-    Attributes:
-        stdout (TextIO): The stdout of the MockTTY object.
-    """
-
-    def __init__(self) -> None:
-        # ProcessOpen signature has many args, but we only need a working stdout for ducktyping
-        """
-        Initialize a MockTTY object.
-
-        This class is used for ducktyping when reading from a pipe or file.
-        It only needs a working stdout for ducktyping, so it doesn't need to
-        follow the ProcessOpen signature.
-        """
-        sys.stdin = TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace")
-
-    @property
-    def stdout(self) -> TextIO:
-        """
-        Returns the stdout of the MockTTY object.
-
-        This property is used for ducktyping when reading from a pipe or file.
-        It returns sys.stdin for compatibility with ProcessOpen objects.
-        """
-        return sys.stdin
-
-    def poll(self) -> Optional[int]:
-        """
-        Check if there is any data available to read from the pipe.
-
-        Returns None if there is no data available, otherwise the number of bytes available to read
-        """
-        return None
-
-
-@dataclass
-class State:
-    """Holds the current state of the logcat processing."""
-
-    pidsMap: Dict[str, str]
-    lastTag: Optional[str]
-    appPID: Optional[str]
-    logLevel: int
-    namedProcesses: List[str]
-    catchallPackage: List[str]
-
-
-@dataclass
-class TextWriter:
-    """Configuration for color output."""
-
-    consoleWidth: int
-    showColors: bool
-    outputFile: Optional[TextIO]
-
-
-@dataclass
-class Args:
-    """Configuration for logcat filtering and display."""
-
-    package: List[str]
-    all: bool = False
-    keepLogcat: bool = False
-    useDevice: bool = False
-    useEmulator: bool = False
-    colorGC: bool = False
-    noColor: bool = False
-    showPID: bool = False
-    showPackage: bool = False
-    alwaysShowTags: bool = False
-    currentApp: bool = False
-    ignoreSystemTags: bool = False
-    tag: Optional[List[str]] = None
-    ignoreTag: Optional[List[str]] = None
-    logLevel: str = "V"
-    regex: Optional[str] = None
-    pidWidth: int = 6
-    packageWidth: int = 20
-    tagWidth: int = 20
-    deviceSerial: Optional[str] = None
-    outputPath: str = ""
 
 
 def getArgParser() -> argparse.ArgumentParser:
@@ -488,7 +402,7 @@ def getTagColor(tag: str) -> int:
     return color
 
 
-def getAdbCommand(args: Args) -> List[str]:
+def getAdbCommand(args: CliArgs) -> List[str]:
     """Constructs the base adb command list."""
 
     baseAdbCommand = ["adb"]
@@ -527,7 +441,7 @@ def getCurrentAppPackage(baseAdbCommand: List[str]) -> Optional[List[str]]:
     return visiblePackages if visiblePackages else None
 
 
-def getProcesses(baseAdbCommand: List[str], catchallPackage: List[str], args: Args) -> Dict[str, str]:
+def getProcesses(baseAdbCommand: List[str], catchallPackage: List[str], args: CliArgs) -> Dict[str, str]:
     """Populates initial PIDs map {PID: PackageName} for catch-all packages or all processes if args.all is True."""
 
     pidsMap = {}
@@ -551,10 +465,8 @@ def getProcesses(baseAdbCommand: List[str], catchallPackage: List[str], args: Ar
             isTargetPackage = process in catchallPackage
 
             # If not using -a, only add targeted packages
-            if not args.all and not isTargetPackage:
-                continue
-
-            pidsMap[pid] = process  # Store {PID: PackageName}
+            if args.all or isTargetPackage:
+                pidsMap[pid] = process  # Store {PID: PackageName}
 
     return pidsMap
 
@@ -619,29 +531,32 @@ def getStartedProcesses(line: str) -> Optional[Tuple[str, str, str, str, str]]:
     return None
 
 
-def writeLogLine(line: str, state: State, args: Args, textWriter: TextWriter) -> None:
+def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) -> None:
     """Handles the processing and output of a single log line."""
 
     pidsMap = state.pidsMap
     lastTag = state.lastTag
     appPid = state.appPID
     logLevel = state.logLevel
-    width = textWriter.consoleWidth
-    showColors = textWriter.showColors
-    outputFile = textWriter.outputFile
     namedProcesses = state.namedProcesses
     catchallPackage = state.catchallPackage
     pidWidth = args.pidWidth
     packageWidth = args.packageWidth
     tagWidth = args.tagWidth
+    currentHeaderSize = 0
 
-    def writeOutput(outputLine: str) -> None:
-        lineNoColor = NO_COLOR.sub("", outputLine)
+    def writeOutput(outputLine: str, wrap: bool = False) -> None:
+        buffer = ""
+        for writer in writers:
+            if wrap and writer.isWrappable:
+                buffer = getWrappedIndent(outputLine, writer.width, currentHeaderSize)
+            else:
+                buffer = outputLine
 
-        print(outputLine if showColors else lineNoColor)
-
-        if outputFile:
-            outputFile.write(lineNoColor + "\n")
+            lineNoColor = NO_COLOR.sub("", buffer)
+            showColors = writer.showColors
+            writer.write(buffer if showColors else lineNoColor)
+            writer.flush()
 
     nativeTags = NATIVE_TAGS_LINE.match(line)
     if nativeTags:
@@ -668,16 +583,14 @@ def writeLogLine(line: str, state: State, args: Args, textWriter: TextWriter) ->
             # Recalculate header size for process start/end messages
             currentHeaderSize = (packageWidth + 2 if args.showPackage else 0) + args.tagWidth + baseLevelSize
 
-            lineBuffer = "\n"
-            lineBuffer += colorize(" " * (currentHeaderSize - 1), background=WHITE)
-            lineBuffer += getWrappedIndent(
-                f" Process {startedPackage} created for {startedTarget}\n", width, currentHeaderSize
-            )
-            lineBuffer += colorize(" " * (currentHeaderSize - 1), background=WHITE)
-            lineBuffer += f" PID: {startedPID}   UID: {startedUID}   GIDs: {startedGIDs}"
-            lineBuffer += "\n"
+            writeOutput("\n")
+            writeOutput(colorize(" " * (currentHeaderSize - 1), background=WHITE))
+            writeOutput(f" Process {startedPackage} created for {startedTarget}\n", wrap=True)
 
-            writeOutput(lineBuffer)
+            writeOutput(colorize(" " * (currentHeaderSize - 1), background=WHITE))
+            writeOutput(f" PID: {startedPID}   UID: {startedUID}   GIDs: {startedGIDs}")
+            writeOutput("\n")
+
             lastTag = None
 
     deadPID, deadProcName = getDeadProcesses(tag, message, set(pidsMap.keys()), namedProcesses, catchallPackage)
@@ -687,12 +600,11 @@ def writeLogLine(line: str, state: State, args: Args, textWriter: TextWriter) ->
 
         currentHeaderSize = (packageWidth + 2 if args.showPackage else 0) + args.tagWidth + baseLevelSize
 
-        lineBuffer = "\n"
-        lineBuffer += colorize(" " * (currentHeaderSize - 1), background=RED)
-        lineBuffer += f" Process {deadProcName} (PID: {deadPID}) ended"
-        lineBuffer += "\n"
+        writeOutput("\n")
+        writeOutput(colorize(" " * (currentHeaderSize - 1), background=RED))
+        writeOutput(f" Process {deadProcName} (PID: {deadPID}) ended")
+        writeOutput("\n")
 
-        writeOutput(lineBuffer)
         lastTag = None
 
     # Filter logs
@@ -715,7 +627,7 @@ def writeLogLine(line: str, state: State, args: Args, textWriter: TextWriter) ->
             message = message.lstrip()
             owner = appPid  # Associate backtrace with the app PID
 
-    lineBuffer = ""
+    # lineBuffer = ""
     currentHeaderSize = 0
 
     # --- OWNER PID SECTION ---
@@ -726,8 +638,8 @@ def writeLogLine(line: str, state: State, args: Args, textWriter: TextWriter) ->
             owner = f"{owner[: pidWidth - 3]}..."
         pidDisplay = owner.ljust(pidWidth)
 
-        lineBuffer += colorize(pidDisplay, pidColor)
-        lineBuffer += "  "  # Two spaces separator
+        writeOutput(colorize(pidDisplay, pidColor))
+        writeOutput("  ")  # Two spaces separator
         currentHeaderSize += pidWidth + 2
     # ----------------------------
 
@@ -740,8 +652,8 @@ def writeLogLine(line: str, state: State, args: Args, textWriter: TextWriter) ->
             packageName = f"{packageName[: packageWidth - 3]}..."
         pkgDisplay = packageName.ljust(packageWidth)
 
-        lineBuffer += colorize(pkgDisplay, pkgColor)
-        lineBuffer += "  "  # Two spaces separator
+        writeOutput(colorize(pkgDisplay, pkgColor))
+        writeOutput("  ")  # Two spaces separator
         currentHeaderSize += packageWidth + 2
     # ----------------------------
 
@@ -755,24 +667,20 @@ def writeLogLine(line: str, state: State, args: Args, textWriter: TextWriter) ->
                 tag = f"{tag[: tagWidth - 3]}..."
             tag = tag.rjust(tagWidth) if args.showPackage else tag.ljust(tagWidth)
 
-            lineBuffer += colorize(tag, color)
+            writeOutput(colorize(tag, color))
         else:
-            lineBuffer += " " * tagWidth
+            writeOutput(" " * tagWidth)
 
-        lineBuffer += " "
+        writeOutput(" ")
         currentHeaderSize += tagWidth + 1
     # ----------------------------
 
     # --- LEVEL SECTION ---
-    levelStr = f" {level} "
-    if showColors:
-        foreground = {"V": WHITE, "D": BLACK, "I": BLACK, "W": BLACK, "E": BLACK, "F": BLACK}.get(level, WHITE)
-        background = {"V": BLACK, "D": BLUE, "I": GREEN, "W": YELLOW, "E": RED, "F": RED}.get(level, BLACK)
-        lineBuffer += colorize(levelStr, foreground, background)
-    else:
-        lineBuffer += levelStr
-
-    lineBuffer += " "
+    foreground = {"V": WHITE, "D": BLACK, "I": BLACK, "W": BLACK, "E": BLACK, "F": BLACK}.get(level, WHITE)
+    background = {"V": BLACK, "D": BLUE, "I": GREEN, "W": YELLOW, "E": RED, "F": RED}.get(level, BLACK)
+    levelStr = colorize(f" {level} ", foreground, background)
+    writeOutput(levelStr)
+    writeOutput(" ")
     currentHeaderSize += baseLevelSize  # Level width + space
     # ----------------------------
 
@@ -794,8 +702,8 @@ def writeLogLine(line: str, state: State, args: Args, textWriter: TextWriter) ->
     for matcher in messageRules:
         message = matcher.sub(messageRules[matcher], message)
 
-    lineBuffer += getWrappedIndent(message, width, currentHeaderSize)
-    writeOutput(lineBuffer)
+    writeOutput(message, wrap=True)
+    writeOutput("\n")
     # ----------------------------
 
     # Update state for next line
@@ -846,16 +754,16 @@ def main() -> None:
     parser = getArgParser()
     args = parser.parse_args()
 
-    args = Args(**vars(args))
+    args = CliArgs(**vars(args))
 
     try:
         baseAdbCommand = getAdbCommand(args)
         adbCommand = baseAdbCommand + ["logcat", "-v", "brief"]
         packages = list(set(args.package))
-        outputFile = None
-
-        if not packages:
-            args.all = True
+        logLevel = LOG_LEVELS_MAP[args.logLevel.upper()]
+        consoleWidth = getConsoleWidth()
+        consoleWriter = ConsoleWriter(width=consoleWidth, showColors=not args.noColor)
+        writers = list[Writer]([consoleWriter])
 
         if args.ignoreSystemTags:
             args.ignoreTag = [f"^{systemTag.strip()}$" for systemTag in SYSTEM_TAGS]
@@ -871,7 +779,9 @@ def main() -> None:
             processRun(adbClearCommand, check=False)
 
         if args.outputPath:
-            outputFile = open(args.outputPath, "a+", encoding="utf-8")
+            outputFile = open(args.outputPath, "w+", encoding="utf-8")
+            fileWriter = FileWriter(width=consoleWidth, outputFile=outputFile)
+            writers.append(fileWriter)
 
         if args.currentApp:
             runningPackages = getCurrentAppPackage(baseAdbCommand)
@@ -883,6 +793,7 @@ def main() -> None:
         if packages:
             print(f"Capturing logcat messages from packages: [{', '.join(packages)}]...")
         else:
+            args.all = True
             print("Capturing logcat messages...")
 
         # Determine exact processes vs. catch-all packages
@@ -890,10 +801,6 @@ def main() -> None:
         namedProcesses = list(filter(lambda package: package.find(":") != -1, packages))
         namedProcesses = list(map(lambda package: package[:-1] if package.endswith(":") else package, namedProcesses))
         pidsMap = getProcesses(baseAdbCommand, catchallPackage, args)
-        logLevel = LOG_LEVELS_MAP[args.logLevel.upper()]
-        consoleWidth = getConsoleWidth()
-
-        textWriter = TextWriter(consoleWidth, not args.noColor, outputFile)
 
         adbPID = ProcessOpen(adbCommand, stdout=PIPE, stderr=PIPE) if sys.stdin.isatty() else MockTTY()
         logStream = adbPID.stdout
@@ -919,15 +826,18 @@ def main() -> None:
             else:
                 line = str(rawLine).strip()
 
-            # Update the console width if it has changed
-            textWriter.consoleWidth = getConsoleWidth()
-            writeLogLine(line, state, args, textWriter)
+            # Update the writers width if changed
+            for writer in writers:
+                consoleWidth = getConsoleWidth()
+                writer.width = consoleWidth
+
+            writeLogLine(line=line, state=state, args=args, writers=writers)
     except KeyboardInterrupt:
         print(f"\n\n\n{Path(parser.prog).stem} stopped by user!", file=sys.stderr)
     finally:
         # Cleanup
-        if outputFile:
-            outputFile.close()
+        for writer in writers:
+            writer.close()
 
 
 if __name__ == "__main__":

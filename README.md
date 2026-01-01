@@ -1,5 +1,5 @@
 <div align="center">
-   <img width="200" src="resources/icon.png" alt="PidCat Icon"/>
+   <img width="200" src="assets/icon.png" alt="PidCat Icon"/>
    <h1>📃 PidCat</h1>
    <p>A colorized Android logcat viewer for Windows with advanced filtering capabilities</p>
 

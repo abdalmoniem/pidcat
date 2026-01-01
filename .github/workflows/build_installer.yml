@@ -31,17 +31,17 @@ jobs:
         run: uv sync
 
       - name: Build Executable
-        run: uv run build.py -e
+        run: uvx tomlscript build
 
       - name: Build Installer
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
-          path: setup/setup.iss
+          path: build/setup/setup.iss
 
       - name: Get Installer Name
         run: |
-          $installerName = $(ls .\setup\Output\*.exe).BaseName
-          $installerPath = $(ls .\setup\Output\*.exe).FullName
+          $installerName = $(ls .\build\setup\Output\*.exe).BaseName
+          $installerPath = $(ls .\build\setup\Output\*.exe).FullName
 
           echo ARTIFACT_NAME=$installerName >> $env:GITHUB_ENV
           echo ARTIFACT_PATH=$installerPath >> $env:GITHUB_ENV

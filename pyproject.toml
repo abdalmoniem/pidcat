@@ -12,25 +12,25 @@ dependencies = [
 
 [tool.tomlscript]
 # Command to build the executable using PyInstaller
-build = "uv run build.py -e"
+build = "uv run build/build.py -e"
 
 # Command to clean the build directory
-clean = "uv run build.py -c"
+clean = "uv run build/build.py -c"
 
 # Command to rebuild the executable
-rebuild = "uv run build.py -r"
+rebuild = "uv run build/build.py -r"
 
 # Command to build the installer using Inno Setup Compiler
-build-installer = "uv run build.py -b"
+build-installer = "uv run build/build.py -b"
 
 # Command to perform a full rebuild and create the installer
-build-all = "uv run build.py -a"
+build-all = "uv run build/build.py -a"
 
 # Command to install the application by running the generated installer
-install = "uv run build.py -i"
+install = "uv run build/build.py -i"
 
 # Command to perform a full rebuild, create the installer, and install the application
-reinstall = "uv run build.py -R"
+reinstall = "uv run build/build.py -R"
 
 [tool.ruff]
 line-length = 120
