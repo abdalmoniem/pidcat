@@ -5,7 +5,7 @@
 
 [![GPLv3 License](https://img.shields.io/badge/License-GPL%20v3-yellow.svg)](LICENSE.md)
 [![Python](https://img.shields.io/badge/python-3.8+-yellow.svg)](https://www.python.org/)
-[![WinGet Package Version](https://img.shields.io/winget/v/AbdElMoniemElHifnawy.PidCat)](https://img.shields.io/winget/v/AbdElMoniemElHifnawy.PidCat)
+[![WinGet Package Version](https://img.shields.io/winget/v/AbdElMoniemElHifnawy.PidCat)](https://winstall.app/apps/AbdElMoniemElHifnawy.PidCat)
 
 [![Views](https://views.whatilearened.today/views/github/abdalmoniem/pidcat.svg)](https://github.com/abdalmoniem/pidcat)
 [![GitHub Release](https://img.shields.io/github/v/release/abdalmoniem/pidcat)](https://github.com/abdalmoniem/pidcat/releases/latest)
@@ -79,7 +79,7 @@ PidCat filters logcat output by application package name, colorizes the output f
 - ### Installer Binaries
 
   [<img alt="Get it on GitHub" height="80" src="assets/badge_github.png"/>](https://github.com/abdalmoniem/pidcat/releases/latest)
-  [<img alt="Get from WinGet" height="80" src="assets/badge_winget.png"/>](https://github.com/abdalmoniem/pidcat/releases/latest)
+  [<img alt="Get from WinGet" height="80" src="assets/badge_winget.png"/>](https://winstall.app/apps/AbdElMoniemElHifnawy.PidCat)
 
   ```bash
   winget install --id AbdElMoniemElHifnawy.PidCat
