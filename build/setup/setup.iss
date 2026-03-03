@@ -5,7 +5,7 @@
 #define AppVersion "2.6.1"
 #define AppPublisher "AbdElMoniem ElHifnawy"
 #define AppURL "https://abdalmoniem.github.io"
-#define AppExeName "PidCat.exe"
+#define AppExeName "pidcat.exe"
 #define DateTime GetDateTimeString('ddd_dd_mmm_yyyy_hh_nn_ss.zzz_ampm', '', '')
 
 [Setup]

@@ -105,7 +105,7 @@ PidCat filters logcat output by application package name, colorizes the output f
     uv sync
 
     # Run directly
-    uv run pidcat.py com.example.app
+    uv run main.py com.example.app
     ```
 
 ---

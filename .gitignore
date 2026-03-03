@@ -1,3 +1,6 @@
+*.log
+/.vscode/*.log
+
 # Python-generated files
 **/__pycache__/
 __pycache__/

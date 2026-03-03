@@ -14,7 +14,7 @@ class ConsoleWriter(Writer):
         import io
 
         self.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-        super().__init__(width=width, showColors=showColors, outputFile=self.stdout, isWrappable=True)
+        super().__init__(width=width, showColors=showColors, outputFile=self.stdout)
 
     @override
     def write(self, text: str) -> None:

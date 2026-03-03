@@ -9,8 +9,8 @@ from typing import override
 
 
 class FileWriter(Writer):
-    def __init__(self, width: int, outputFile: TextIO) -> None:
-        super().__init__(width=width, showColors=False, outputFile=outputFile, isWrappable=False)
+    def __init__(self, outputFile: TextIO) -> None:
+        super().__init__(width=-1, showColors=False, outputFile=outputFile)
 
     @override
     def write(self, text: str) -> None:

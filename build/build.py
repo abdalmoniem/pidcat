@@ -36,7 +36,7 @@ versionPath = str(Path(scriptDir).joinpath("resources", "version_info.py"))
 workPath = str(Path(scriptDir).joinpath("generated", "build"))
 distPath = str(Path(scriptDir).joinpath("generated", "dist"))
 generatedPath = str(Path(scriptDir).joinpath("generated"))
-mainScript = str(Path(scriptDir).parent.joinpath("pidcat.py"))
+mainScript = str(Path(scriptDir).parent.joinpath("main.py"))
 setupScriptPath = str(Path(scriptDir).joinpath("setup"))
 setupOutputPath = str(Path(setupScriptPath).joinpath("Output"))
 setupScript = str(Path(setupScriptPath).joinpath("setup.iss"))
@@ -92,8 +92,10 @@ def createArgParser() -> argparse.ArgumentParser:
         prog=Path(sys.argv[0]).stem,
         description="Builds the PidCat executable using PyInstaller",
     )
+    
+    aboutOptions = parser.add_argument_group(title="Options")
 
-    parser.add_argument(
+    aboutOptions.add_argument(
         "-h",
         "--help",
         action="help",
@@ -101,7 +103,7 @@ def createArgParser() -> argparse.ArgumentParser:
         help="Show this help message and exit.",
     )
 
-    parser.add_argument(
+    aboutOptions.add_argument(
         "-v",
         "--version",
         action="version",
@@ -109,7 +111,7 @@ def createArgParser() -> argparse.ArgumentParser:
         help="Print the version number and exit",
     )
 
-    parser.add_argument(
+    aboutOptions.add_argument(
         "-e",
         "--build-executable",
         dest="buildExecutable",
@@ -118,7 +120,7 @@ def createArgParser() -> argparse.ArgumentParser:
         help="Build the executable using PyInstaller, default: %(default)s",
     )
 
-    parser.add_argument(
+    aboutOptions.add_argument(
         "-b",
         "--build-installer",
         dest="buildInstaller",
@@ -127,7 +129,7 @@ def createArgParser() -> argparse.ArgumentParser:
         help="Build the installer using Inno Setup Compiler, default: %(default)s",
     )
 
-    parser.add_argument(
+    aboutOptions.add_argument(
         "-c",
         "--clean",
         dest="clean",
@@ -136,7 +138,7 @@ def createArgParser() -> argparse.ArgumentParser:
         help="Clean generated files, default: %(default)s",
     )
 
-    parser.add_argument(
+    aboutOptions.add_argument(
         "-r",
         "--rebuild",
         dest="rebuild",
@@ -145,7 +147,7 @@ def createArgParser() -> argparse.ArgumentParser:
         help="Rebuild the executable package, default: %(default)s",
     )
 
-    parser.add_argument(
+    aboutOptions.add_argument(
         "-a",
         "--build-all",
         dest="buildAll",
@@ -154,7 +156,7 @@ def createArgParser() -> argparse.ArgumentParser:
         help="Build both the executable and installer packages, default: %(default)s",
     )
 
-    parser.add_argument(
+    aboutOptions.add_argument(
         "-i",
         "--install",
         dest="install",
@@ -163,7 +165,7 @@ def createArgParser() -> argparse.ArgumentParser:
         help="Install the application by running the generated installer, default: %(default)s",
     )
 
-    parser.add_argument(
+    aboutOptions.add_argument(
         "-R",
         "--reinstall",
         dest="reinstall",
@@ -172,7 +174,7 @@ def createArgParser() -> argparse.ArgumentParser:
         help="Rebuild, build installer, and install, default: %(default)s",
     )
 
-    parser.add_argument(
+    aboutOptions.add_argument(
         "-p",
         "--iscc-path",
         metavar="ISCC_PATH",
@@ -376,16 +378,33 @@ def runPyInstaller() -> None:
     This function runs the PyInstaller command with the necessary arguments to build the executable.
     """
 
+    pyinstallerLogConfig = (
+        "import sys;"
+        "import logging;"
+        "from PyInstaller.__main__ import run;"
+        "root = logging.getLogger();"
+        "[root.removeHandler(handler) for handler in root.handlers];"
+        "streamHandler = logging.StreamHandler(sys.stdout);"
+        "streamHandler.addFilter(lambda logRecord: logRecord.levelno < logging.ERROR);"
+        "root.addHandler(streamHandler);"
+        "stderrHandler = logging.StreamHandler(sys.stderr);"
+        "stderrHandler.setLevel(logging.ERROR);"
+        "root.addHandler(stderrHandler);"
+        "run()"
+    )
+
     command = [
-        "pyinstaller",
+        # "pyinstaller",
+        sys.executable, "-c", pyinstallerLogConfig,
         "--onefile",
         "--console",
+        # "--log-level=DEBUG",
         f"--workpath={workPath}",
         f"--distpath={distPath}",
         f"--specpath={generatedPath}",
         f"--icon={iconPath}",
         f"--version-file={versionPath}",
-        "--name=PidCat",
+        "--name=pidcat",
         mainScript,
     ]
 
@@ -435,10 +454,17 @@ def runInstaller() -> None:
     It searches for the latest installer executable in the setup/Output directory.
     """
 
-    installerPath = str(max(glob.glob(f"{setupOutputPath}/*.exe"), key=os.path.getmtime))
-    command = [installerPath]
+    installersPaths = glob.glob(f"{setupOutputPath}/*.exe")
 
-    runCommand(command=command, errorMessage="Error occurred while running installer")
+    if installersPaths:
+        installerPath = str(max(installersPaths, key=os.path.getmtime))
+        command = [installerPath]
+
+        runCommand(command=command, errorMessage="Error occurred while running installer")
+    else:
+        error = colorize("[!] installer path not found!", foreground=RED)
+        print(error, file=sys.stderr)
+        sys.exit(1)
 
 
 def main() -> None:

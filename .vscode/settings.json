@@ -1,7 +1,8 @@
 {
-   "editor.rulers": [120],
-   "ty.disableLanguageServices": true,
    "editor.tabSize": 4,
-   "editor.indentSize": "tabSize"
-   // "python.languageServer": "None"
+   "editor.rulers": [120],
+   "editor.indentSize": "tabSize",
+   // "python.languageServer": "None",
+   "ty.disableLanguageServices": true,
+   "debug.terminal.clearBeforeReusing": true,
 }

@@ -2,11 +2,10 @@ from typing import TextIO
 
 
 class Writer:
-    def __init__(self, width: int, showColors: bool, outputFile: TextIO, isWrappable: bool = False) -> None:
+    def __init__(self, width: int, showColors: bool, outputFile: TextIO) -> None:
         self.width = width
-        self.outputFile = outputFile
         self.showColors = showColors
-        self.isWrappable = isWrappable
+        self.outputFile = outputFile
 
     def write(self, text: str) -> None:
         pass
@@ -16,3 +15,10 @@ class Writer:
 
     def close(self) -> None:
         pass
+
+    def __str__(self) -> str:
+        width, showColors, outputFile = self.width, self.showColors, self.outputFile.name
+        return f"{self.__class__.__name__}({width=}, {showColors=}, {outputFile=})"
+
+    def __repr__(self) -> str:
+        return self.__str__()
