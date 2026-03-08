@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import sys
 import glob
@@ -6,13 +8,12 @@ import argparse
 import threading
 import subprocess
 
-from subprocess import PIPE
-
+from enum import StrEnum
 from pathlib import Path
-from dataclasses import dataclass
-
+from subprocess import PIPE
 from io import TextIOWrapper
-from typing import TextIO, cast
+from dataclasses import dataclass
+from typing import cast, List, Optional, TextIO, Union
 
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -43,45 +44,66 @@ setupScript = str(Path(setupScriptPath).joinpath("setup.iss"))
 versionInfoScript = str(Path(scriptDir).joinpath("resources", "version_info.py"))
 
 
+class CommandName(StrEnum):
+    Clean = "clean"
+    Build = "build"
+    Rebuild = "rebuild"
+    BuildInstaller = "build-installer"
+    BuildAll = "build-all"
+    Install = "install"
+    Reinstall = "reinstall"
+    Help = "help"
+
+
 @dataclass
-class CliArgs:
-    """
-    Holds the command-line arguments for the build script.
+class Command:
+    @dataclass
+    class Clean:
+        pass
 
-    Attributes:
-        buildExecutable (bool): build the executable package
-        buildInstaller (bool): build the installer package
-        clean (bool): clean generated files
-        rebuild (bool): rebuild the executable package
-        buildAll (bool): build both the executable and installer packages
-        install (bool): install after building
-        reinstall (bool): rebuild, build installer, and install
-        isccPath (str): path to the Inno Setup Compiler (iscc.exe)
-    """
+    @dataclass
+    class Build:
+        pass
 
-    buildExecutable: bool = False
-    """build the executable package"""
+    @dataclass
+    class Rebuild:
+        pass
 
-    buildInstaller: bool = False
-    """build the installer package"""
+    @dataclass
+    class BuildInstaller:
+        isccPath: Optional[str] = None
 
-    clean: bool = False
-    """clean generated files"""
+    @dataclass
+    class BuildAll:
+        isccPath: Optional[str] = None
 
-    rebuild: bool = False
-    """rebuild the executable package"""
+    @dataclass
+    class Install:
+        pass
 
-    buildAll: bool = False
-    """build both the executable and installer packages"""
+    @dataclass
+    class Reinstall:
+        isccPath: Optional[str] = None
 
-    install: bool = False
-    """install after building"""
-
-    reinstall: bool = False
-    """rebuild, build installer, and install"""
-
-    isccPath: str = ""
-    """path to the Inno Setup Compiler (iscc.exe)"""
+    @staticmethod
+    def fromArgs(
+        args: argparse.Namespace,
+    ) -> Union[Clean, Build, Rebuild, BuildInstaller, BuildAll, Install, Reinstall]:
+        match CommandName(args.command):
+            case CommandName.Clean:
+                return Command.Clean()
+            case CommandName.Build:
+                return Command.Build()
+            case CommandName.Rebuild:
+                return Command.Rebuild()
+            case CommandName.BuildInstaller:
+                return Command.BuildInstaller(args.isccPath)
+            case CommandName.BuildAll:
+                return Command.BuildAll(args.isccPath)
+            case CommandName.Install:
+                return Command.Install()
+            case CommandName.Reinstall:
+                return Command.Reinstall(args.isccPath)
 
 
 def createArgParser() -> argparse.ArgumentParser:
@@ -116,7 +138,7 @@ def createArgParser() -> argparse.ArgumentParser:
     subParsers = parser.add_subparsers(dest="command", metavar="COMMAND")
 
     subParsers.add_parser(
-        "clean",
+        CommandName.Clean,
         add_help=False,
         parents=[helpParent],
         help="Clean generated files",
@@ -124,7 +146,7 @@ def createArgParser() -> argparse.ArgumentParser:
     )
 
     subParsers.add_parser(
-        "build-executable",
+        CommandName.Build,
         add_help=False,
         parents=[helpParent],
         help="Build the executable using PyInstaller",
@@ -132,7 +154,7 @@ def createArgParser() -> argparse.ArgumentParser:
     )
 
     subParsers.add_parser(
-        "rebuild",
+        CommandName.Rebuild,
         add_help=False,
         parents=[helpParent],
         help="Rebuild the executable package",
@@ -140,7 +162,7 @@ def createArgParser() -> argparse.ArgumentParser:
     )
 
     subParsers.add_parser(
-        "build-installer",
+        CommandName.BuildInstaller,
         add_help=False,
         parents=[helpParent],
         help="Build the installer using Inno Setup Compiler",
@@ -156,7 +178,7 @@ def createArgParser() -> argparse.ArgumentParser:
     )
 
     subParsers.add_parser(
-        "build-all",
+        CommandName.BuildAll,
         add_help=False,
         parents=[helpParent],
         help="Build both the executable and installer packages",
@@ -172,7 +194,7 @@ def createArgParser() -> argparse.ArgumentParser:
     )
 
     subParsers.add_parser(
-        "install",
+        CommandName.Install,
         add_help=False,
         parents=[helpParent],
         help="Install the application by running the generated installer",
@@ -180,7 +202,7 @@ def createArgParser() -> argparse.ArgumentParser:
     )
 
     subParsers.add_parser(
-        "reinstall",
+        CommandName.Reinstall,
         add_help=False,
         parents=[helpParent],
         help="Rebuild, build installer, and install",
@@ -432,17 +454,17 @@ def runPyInstaller() -> None:
     runCommand(command=command, errorMessage="Error occurred while building executable")
 
 
-def runBuildInstaller(args: CliArgs) -> None:
+def runBuildInstaller(isccPath: Optional[str] = None) -> None:
     """
     Builds the Inno Setup installer.
 
     This function runs the Inno Setup compiler command with the necessary arguments to build the installer.
 
     Arguments:
-        args (Args): The parsed command-line arguments.
+        isccPath (str): path to the Inno Setup Compiler (iscc.exe).
     """
 
-    isccPath = "iscc" if not args.isccPath else args.isccPath
+    isccPath = "iscc" if not isccPath else isccPath
     command = [isccPath, setupScript]
 
     try:
@@ -488,6 +510,10 @@ def runInstaller() -> None:
         sys.exit(1)
 
 
+def splitArgs(args: str) -> List[str]:
+    return args.split(r"\s+")
+
+
 def main() -> None:
     """
     Main entry point for the build script.
@@ -503,68 +529,62 @@ def main() -> None:
         parser.print_help()
         sys.exit(0)
 
-    if args.command == "help":
-        parser.parse_args([args.helpCommand, "--help"] if args.helpCommand else ["--help"])
+    if args.command == CommandName.Help:
+        parser.parse_args(splitArgs(f"{args.helpCommand} --help") if args.helpCommand else splitArgs("--help"))
         sys.exit(0)
 
-    args = CliArgs(
-        clean=args.command == "clean",
-        rebuild=args.command == "rebuild",
-        buildExecutable=args.command == "build-executable",
-        buildInstaller=args.command == "build-installer",
-        buildAll=args.command == "build-all",
-        install=args.command == "install",
-        reinstall=args.command == "reinstall",
-        isccPath=getattr(args, "isccPath", None) or "",
-    )
-
-    if args.buildAll:
-        args.buildExecutable = True
-        args.buildInstaller = True
+    command = Command.fromArgs(args)
 
     print(f"[*] Building PidCat v{VERSION}...")
 
     print("[*] Updating version information...")
     updateVersions()
 
-    if args.clean:
-        print("[*] Cleaning generated files...")
-        clean()
+    match command:
+        case Command.Clean():
+            print("[*] Cleaning generated files...")
+            clean()
 
-    if args.rebuild:
-        print("[*] Cleaning generated files...")
-        clean()
-        print("[*] Rebuilding executable...")
-        runPyInstaller()
+        case Command.Build():
+            print("[*] Running PyInstaller...")
+            runPyInstaller()
 
-    if args.buildExecutable:
-        print("[*] Running PyInstaller...")
-        runPyInstaller()
+        case Command.Rebuild():
+            print("[*] Cleaning generated files...")
+            clean()
 
-    if args.buildInstaller:
-        print("[*] Building installer...")
-        runBuildInstaller(args)
+            print("[*] Rebuilding executable...")
+            runPyInstaller()
 
-    if args.install:
-        print("[*] Running installer...")
-        runInstaller()
+        case Command.BuildInstaller(isccPath):
+            print("[*] Building installer...")
+            runBuildInstaller(isccPath)
 
-    if args.reinstall:
-        print("[*] Cleaning generated files...")
-        clean()
-        print("[*] Rebuilding executable...")
-        runPyInstaller()
-        print("[*] Building installer...")
-        runBuildInstaller(args)
-        print("[*] Running installer...")
-        runInstaller()
+        case Command.BuildAll(isccPath):
+            print("[*] Running PyInstaller...")
+            runPyInstaller()
 
-    anyOptionSet = any(vars(args).values())
+            print("[*] Building installer...")
+            runBuildInstaller(isccPath)
 
-    if anyOptionSet:
-        print("[✓] Build complete!")
-    else:
-        parser.print_help()
+        case Command.Install():
+            print("[*] Running installer...")
+            runInstaller()
+
+        case Command.Reinstall(isccPath):
+            print("[*] Cleaning generated files...")
+            clean()
+
+            print("[*] Rebuilding executable...")
+            runPyInstaller()
+
+            print("[*] Building installer...")
+            runBuildInstaller(isccPath)
+
+            print("[*] Running installer...")
+            runInstaller()
+
+    print("[✓] Build complete!")
 
 
 if __name__ == "__main__":

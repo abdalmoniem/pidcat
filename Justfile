@@ -15,20 +15,15 @@ TARGET_OS := os()
 default:
     @just --list --unsorted
 
-[doc('Run the pidcat python script directly')]
-[group('run')]
-run args:
-    @uv run main.py $args
-
-[doc('Build the pidcat executable using PyInstaller')]
-[group('build')]
-build:
-    @uv run build/build.py build-executable
-
 [doc('Clean the build directory')]
 [group('build')]
 clean:
     @uv run build/build.py clean
+
+[doc('Build the pidcat executable using PyInstaller')]
+[group('build')]
+build:
+    @uv run build/build.py build
 
 [doc('Rebuild the pidcat executable using PyInstaller')]
 [group('build')]
@@ -44,6 +39,11 @@ build-installer:
 [group('build')]
 build-all:
     @uv run build/build.py build-all
+
+[doc('Run the pidcat python script directly')]
+[group('run')]
+run args:
+    @uv run main.py $args
 
 [doc('Install the application by running the generated installer')]
 [group('install')]
