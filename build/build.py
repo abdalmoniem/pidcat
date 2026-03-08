@@ -510,7 +510,7 @@ def main() -> None:
     args = CliArgs(
         clean=args.command == "clean",
         rebuild=args.command == "rebuild",
-        buildExecutable=args.command == "build",
+        buildExecutable=args.command == "build-executable",
         buildInstaller=args.command == "build-installer",
         buildAll=args.command == "build-all",
         install=args.command == "install",
