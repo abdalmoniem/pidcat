@@ -87,21 +87,23 @@ class CliArgs:
 def createArgParser() -> argparse.ArgumentParser:
     """Creates and returns the ArgumentParser instance."""
 
-    parser = argparse.ArgumentParser(
-        add_help=False,
-        prog=Path(sys.argv[0]).stem,
-        description="Builds the PidCat executable using PyInstaller",
-    )
-    
-    aboutOptions = parser.add_argument_group(title="Options")
-
-    aboutOptions.add_argument(
+    helpParent = argparse.ArgumentParser(add_help=False)
+    helpParent.add_argument(
         "-h",
         "--help",
         action="help",
         default=argparse.SUPPRESS,
-        help="Show this help message and exit.",
+        help="Show this help message and exit",
     )
+
+    parser = argparse.ArgumentParser(
+        add_help=False,
+        parents=[helpParent],
+        prog=Path(sys.argv[0]).stem,
+        description="Builds the PidCat executable using PyInstaller",
+    )
+
+    aboutOptions = parser.add_argument_group(title="Options")
 
     aboutOptions.add_argument(
         "-v",
@@ -111,70 +113,39 @@ def createArgParser() -> argparse.ArgumentParser:
         help="Print the version number and exit",
     )
 
-    aboutOptions.add_argument(
-        "-e",
-        "--build-executable",
-        dest="buildExecutable",
-        action="store_true",
-        default=False,
-        help="Build the executable using PyInstaller, default: %(default)s",
+    subParsers = parser.add_subparsers(dest="command", metavar="COMMAND")
+
+    subParsers.add_parser(
+        "clean",
+        add_help=False,
+        parents=[helpParent],
+        help="Clean generated files",
+        description="Clean generated files",
     )
 
-    aboutOptions.add_argument(
-        "-b",
-        "--build-installer",
-        dest="buildInstaller",
-        action="store_true",
-        default=False,
-        help="Build the installer using Inno Setup Compiler, default: %(default)s",
+    subParsers.add_parser(
+        "build-executable",
+        add_help=False,
+        parents=[helpParent],
+        help="Build the executable using PyInstaller",
+        description="Build the executable using PyInstaller",
     )
 
-    aboutOptions.add_argument(
-        "-c",
-        "--clean",
-        dest="clean",
-        action="store_true",
-        default=False,
-        help="Clean generated files, default: %(default)s",
+    subParsers.add_parser(
+        "rebuild",
+        add_help=False,
+        parents=[helpParent],
+        help="Rebuild the executable package",
+        description="Rebuild the executable package",
     )
 
-    aboutOptions.add_argument(
-        "-r",
-        "--rebuild",
-        dest="rebuild",
-        action="store_true",
-        default=False,
-        help="Rebuild the executable package, default: %(default)s",
-    )
-
-    aboutOptions.add_argument(
-        "-a",
-        "--build-all",
-        dest="buildAll",
-        action="store_true",
-        default=False,
-        help="Build both the executable and installer packages, default: %(default)s",
-    )
-
-    aboutOptions.add_argument(
-        "-i",
-        "--install",
-        dest="install",
-        action="store_true",
-        default=False,
-        help="Install the application by running the generated installer, default: %(default)s",
-    )
-
-    aboutOptions.add_argument(
-        "-R",
-        "--reinstall",
-        dest="reinstall",
-        action="store_true",
-        default=False,
-        help="Rebuild, build installer, and install, default: %(default)s",
-    )
-
-    aboutOptions.add_argument(
+    subParsers.add_parser(
+        "build-installer",
+        add_help=False,
+        parents=[helpParent],
+        help="Build the installer using Inno Setup Compiler",
+        description="Build the installer using Inno Setup Compiler",
+    ).add_argument(
         "-p",
         "--iscc-path",
         metavar="ISCC_PATH",
@@ -183,6 +154,54 @@ def createArgParser() -> argparse.ArgumentParser:
         default=None,
         help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
     )
+
+    subParsers.add_parser(
+        "build-all",
+        add_help=False,
+        parents=[helpParent],
+        help="Build both the executable and installer packages",
+        description="Build both the executable and installer packages",
+    ).add_argument(
+        "-p",
+        "--iscc-path",
+        metavar="ISCC_PATH",
+        dest="isccPath",
+        action="store",
+        default=None,
+        help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
+    )
+
+    subParsers.add_parser(
+        "install",
+        add_help=False,
+        parents=[helpParent],
+        help="Install the application by running the generated installer",
+        description="Install the application by running the generated installer",
+    )
+
+    subParsers.add_parser(
+        "reinstall",
+        add_help=False,
+        parents=[helpParent],
+        help="Rebuild, build installer, and install",
+        description="Rebuild, build installer, and install",
+    ).add_argument(
+        "-p",
+        "--iscc-path",
+        metavar="ISCC_PATH",
+        dest="isccPath",
+        action="store",
+        default=None,
+        help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
+    )
+
+    subParsers.add_parser(
+        "help",
+        add_help=False,
+        parents=[helpParent],
+        help="Show this help message or the help of a command and exit",
+        description="Show this help message or the help of a command and exit",
+    ).add_argument("helpCommand", nargs="?", metavar="COMMAND", help="Command to show help for")
 
     return parser
 
@@ -395,7 +414,9 @@ def runPyInstaller() -> None:
 
     command = [
         # "pyinstaller",
-        sys.executable, "-c", pyinstallerLogConfig,
+        sys.executable,
+        "-c",
+        pyinstallerLogConfig,
         "--onefile",
         "--console",
         # "--log-level=DEBUG",
@@ -478,7 +499,24 @@ def main() -> None:
     parser = createArgParser()
     args = parser.parse_args()
 
-    args = CliArgs(**vars(args))
+    if not args.command:
+        parser.print_help()
+        sys.exit(0)
+
+    if args.command == "help":
+        parser.parse_args([args.helpCommand, "--help"] if args.helpCommand else ["--help"])
+        sys.exit(0)
+
+    args = CliArgs(
+        clean=args.command == "clean",
+        rebuild=args.command == "rebuild",
+        buildExecutable=args.command == "build",
+        buildInstaller=args.command == "build-installer",
+        buildAll=args.command == "build-all",
+        install=args.command == "install",
+        reinstall=args.command == "reinstall",
+        isccPath=getattr(args, "isccPath", None) or "",
+    )
 
     if args.buildAll:
         args.buildExecutable = True
