@@ -4,9 +4,14 @@ name: Build Installer
 run-name: ${{ github.workflow }} ${{ github.event.repository.updated_at}}
 
 on:
+  workflow_call:
+    outputs:
+      artifact_name:
+        description: "The name of the generated artifact"
+        value: ${{ jobs.build-installer.outputs.artifact_name }}
   workflow_dispatch:
   push:
-    branches: ["main"]
+    branches: ["**"]
   schedule:
     - cron: "00 00 * * 5"
 
@@ -15,7 +20,11 @@ permissions:
 
 jobs:
   build-installer:
+    name: Build Installer
     runs-on: windows-latest
+    outputs:
+      artifact_name: ${{ steps.get-installer-name.outputs.artifact_name }}
+      artifact_path: ${{ steps.get-installer-name.outputs.artifact_path }}
 
     steps:
       - name: Checkout ${{ github.ref }}
@@ -44,16 +53,17 @@ jobs:
           path: build/setup/setup.iss
 
       - name: Get Installer Name
+        id: get-installer-name
         run: |
           $installerName = $(ls .\build\setup\Output\*.exe).BaseName
           $installerPath = $(ls .\build\setup\Output\*.exe).FullName
 
-          echo ARTIFACT_NAME=$installerName >> $env:GITHUB_ENV
-          echo ARTIFACT_PATH=$installerPath >> $env:GITHUB_ENV
+          echo "artifact_name=$installerName" >> $env:GITHUB_OUTPUT
+          echo "artifact_path=$installerPath" >> $env:GITHUB_OUTPUT
 
-      - name: Create Artifact ${{ env.ARTIFACT_NAME }}
+      - name: Create Artifact ${{ steps.get-installer-name.outputs.artifact_name }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ARTIFACT_NAME }}
-          path: ${{ env.ARTIFACT_PATH }}
+          name: ${{ steps.get-installer-name.outputs.artifact_name }}
+          path: ${{ steps.get-installer-name.outputs.artifact_path }}
           if-no-files-found: error
