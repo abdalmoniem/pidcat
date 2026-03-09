@@ -59,8 +59,8 @@ reinstall:
 
     @just post_install
 
-[doc('shows changelog for tag')]
 [arg('tag', help='the tag to show changelog for')]
+[doc('shows changelog for tag')]
 [group('changelog')]
 tag_changelog tag:
     @git-cliff --body="$(cat cliff_body.tera)" "$(git describe --tags --abbrev=0 $tag^ 2>/dev/null || git rev-list --max-parents=0 HEAD)..$tag"
