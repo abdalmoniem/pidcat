@@ -622,18 +622,17 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
     tagWidth = args.tagWidth
     currentHeaderSize = 0
 
-    def writeLine(outputLine: str, wrap: bool = False) -> None:
-        buffer = ""
-        for writer in writers:
+    writerBuffers = [""] * len(writers)
+
+    def writeToken(outputLine: str, wrap: bool = False) -> None:
+        for index, writer in enumerate(writers):
             if wrap and writer.width != -1:
                 buffer = getWrappedIndent(outputLine, writer.width, currentHeaderSize)
             else:
                 buffer = outputLine
 
             lineNoColor = NO_COLOR.sub("", buffer)
-            showColors = writer.showColors
-            writer.write(buffer if showColors else lineNoColor)
-            writer.flush()
+            writerBuffers[index] += buffer if writer.showColors else lineNoColor
 
     nativeTags = NATIVE_TAGS_LINE.match(line)
     if nativeTags:
@@ -660,13 +659,13 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
             # Recalculate header size for process start/end messages
             currentHeaderSize = (packageWidth + 2 if args.showPackage else 0) + args.tagWidth + baseLevelSize
 
-            writeLine("\n")
-            writeLine(colorize(" " * (currentHeaderSize - 1), background=WHITE))
-            writeLine(f" Process {startedPackage} created for {startedTarget}\n", wrap=True)
+            writeToken("\n")
+            writeToken(colorize(" " * (currentHeaderSize - 1), background=WHITE))
+            writeToken(f" Process {startedPackage} created for {startedTarget}\n", wrap=True)
 
-            writeLine(colorize(" " * (currentHeaderSize - 1), background=WHITE))
-            writeLine(f" PID: {startedPID}   UID: {startedUID}   GIDs: {startedGIDs}")
-            writeLine("\n")
+            writeToken(colorize(" " * (currentHeaderSize - 1), background=WHITE))
+            writeToken(f" PID: {startedPID}   UID: {startedUID}   GIDs: {startedGIDs}")
+            writeToken("\n")
 
             lastTag = None
 
@@ -677,10 +676,10 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
 
         currentHeaderSize = (packageWidth + 2 if args.showPackage else 0) + args.tagWidth + baseLevelSize
 
-        writeLine("\n")
-        writeLine(colorize(" " * (currentHeaderSize - 1), background=RED))
-        writeLine(f" Process {deadProcName} (PID: {deadPID}) ended")
-        writeLine("\n")
+        writeToken("\n")
+        writeToken(colorize(" " * (currentHeaderSize - 1), background=RED))
+        writeToken(f" Process {deadProcName} (PID: {deadPID}) ended")
+        writeToken("\n")
 
         lastTag = None
 
@@ -715,8 +714,8 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
             owner = f"{owner[: pidWidth - 3]}..."
         pidDisplay = owner.ljust(pidWidth)
 
-        writeLine(colorize(pidDisplay, pidColor))
-        writeLine("  ")  # Two spaces separator
+        writeToken(colorize(pidDisplay, pidColor))
+        writeToken("  ")  # Two spaces separator
         currentHeaderSize += pidWidth + 2
     # ----------------------------
 
@@ -729,8 +728,8 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
             packageName = f"{packageName[: packageWidth - 3]}..."
         pkgDisplay = packageName.ljust(packageWidth)
 
-        writeLine(colorize(pkgDisplay, pkgColor))
-        writeLine("  ")  # Two spaces separator
+        writeToken(colorize(pkgDisplay, pkgColor))
+        writeToken("  ")  # Two spaces separator
         currentHeaderSize += packageWidth + 2
     # ----------------------------
 
@@ -744,11 +743,11 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
                 tag = f"{tag[: tagWidth - 3]}..."
             tag = tag.rjust(tagWidth) if args.showPackage else tag.ljust(tagWidth)
 
-            writeLine(colorize(tag, color))
+            writeToken(colorize(tag, color))
         else:
-            writeLine(" " * tagWidth)
+            writeToken(" " * tagWidth)
 
-        writeLine(" ")
+        writeToken(" ")
         currentHeaderSize += tagWidth + 1
     # ----------------------------
 
@@ -756,8 +755,8 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
     foreground = {"V": WHITE, "D": BLACK, "I": BLACK, "W": BLACK, "E": BLACK, "F": BLACK}.get(level, WHITE)
     background = {"V": BLACK, "D": BLUE, "I": GREEN, "W": YELLOW, "E": RED, "F": RED}.get(level, BLACK)
     levelStr = colorize(f" {level} ", foreground, background)
-    writeLine(levelStr)
-    writeLine(" ")
+    writeToken(levelStr)
+    writeToken(" ")
     currentHeaderSize += baseLevelSize  # Level width + space
     # ----------------------------
 
@@ -795,8 +794,12 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
     for rule in messageRules:
         message = rule.matchPattern.sub(rule.subPattern, message)
 
-    writeLine(message, wrap=True)
-    writeLine("\n")
+    writeToken(message, wrap=True)
+    writeToken("\n")
+
+    for index, writer in enumerate(writers):
+        writer.write(writerBuffers[index])
+        writer.flush()
     # ----------------------------
 
     # Update state for next line
@@ -977,7 +980,9 @@ def main() -> None:
             print(errMsg, file=sys.stderr)
             sys.exit(err.returncode)
     except KeyboardInterrupt:
-        print(f"\n\n\n{Path(parser.prog).stem} stopped by user!", file=sys.stderr)
+        msg = colorize(f"{Path(parser.prog).stem} stopped by user!", foreground=CYAN)
+
+        print(msg, file=sys.stderr)
     finally:
         # Cleanup
         for writer in writers:
