@@ -20,7 +20,7 @@ class AdbState(Enum):
 
     @staticmethod
     def fromStr(string: str) -> AdbState:
-        match string:
+        match string.lower():
             case "device":
                 return AdbState.Device
             case "emulator":

@@ -42,12 +42,9 @@ class Style:
 
 
 class ColoredString(str):
-    _raw: str
-    _style: Style
-
     def __init__(self, string: str = ""):
-        self._raw = string
-        self._style = Style()
+        self._raw: str = string
+        self._style: Style = Style()
 
     def _render(self) -> ColoredString:
         codes = list[str]()
@@ -117,6 +114,10 @@ class ColoredString(str):
     def strikethrough(self) -> ColoredString:
         self._style.strikethrough = True
         return self._render()
+
+    @property
+    def raw(self):
+        return self._raw
 
     def reset(self) -> ColoredString:
         self._style = Style()

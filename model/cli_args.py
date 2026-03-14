@@ -10,62 +10,62 @@ class CliArgs:
     package: List[str]
     """List of package names to filter by"""
 
-    useDevice: bool = False
+    use_device: bool = False
     """Use first device for log input"""
 
-    useEmulator: bool = False
+    use_emulator: bool = False
     """Use first emulator for log input"""
 
-    deviceSerial: Optional[str] = None
+    device_serial: Optional[str] = None
     """Serial number of device to use for log input"""
 
     all: bool = False
     """Show all packages"""
 
-    keepLogcat: bool = False
+    keep_logcat: bool = False
     """Keep entire logcat before running"""
 
-    currentApp: bool = False
+    current_app: bool = False
     """Filter logcat by current running app(s)"""
 
-    ignoreSystemTags: bool = False
+    ignore_system_tags: bool = False
     """Filter output by ignoring known system tags"""
 
     tag: Optional[List[str]] = None
     """Filter output by specified tag(s)"""
 
-    ignoreTag: Optional[List[str]] = None
+    ignore_tag: Optional[List[str]] = None
     """Filter output by ignoring specified tag(s)"""
 
-    logLevel: str = "V"
+    log_level: str = "V"
     """Filter output by log level"""
 
     regex: Optional[str] = None
     """Filter output by regular expression"""
 
-    showPID: bool = False
+    show_pid: bool = False
     """Show PID column"""
 
-    showPackage: bool = False
+    show_package: bool = False
     """Show package column"""
 
-    alwaysShowTags: bool = False
+    always_show_tags: bool = False
     """Always show the tag name"""
 
-    pidWidth: int = 6
+    pid_width: int = 6
     """Width of the PID column"""
 
-    packageWidth: int = 20
+    package_width: int = 20
     """Width of the package column"""
 
-    tagWidth: int = 20
+    tag_width: int = 20
     """Width of the tag column"""
 
-    gcColor: bool = False
+    gc_color: bool = False
     """Enable garabage collector messages colors"""
 
-    noColor: bool = False
+    no_color: bool = False
     """Disable colors in output"""
 
-    outputPath: str = ""
+    output_path: str = ""
     """Path to output file"""

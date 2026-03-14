@@ -1,1 +1,1 @@
-from .Colored import Color, ColoredString  # noqa: F401
+from .colored import Color, ColoredString  # noqa: F401

@@ -1,20 +1,20 @@
 from typing import TextIO
 from typing import override
 
-from controller.Writer import Writer
+from controller.writer import Writer
 
 class FileWriter(Writer):
     def __init__(self, outputFile: TextIO) -> None:
-        super().__init__(width=None, showColors=False, outputFile=outputFile)
+        super().__init__(width=None, show_colors=False, output_file=outputFile)
 
     @override
     def write(self, text: str) -> None:
-        self.outputFile.write(f"{text}")
+        self.output_file.write(f"{text}")
 
     @override
     def flush(self) -> None:
-        self.outputFile.flush()
+        self.output_file.flush()
 
     @override
     def close(self) -> None:
-        self.outputFile.close()
+        self.output_file.close()

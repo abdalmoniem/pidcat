@@ -8,9 +8,9 @@ from dataclasses import dataclass
 class State:
     """Holds the current state of the logcat processing."""
 
-    pidsMap: Dict[str, str]
-    lastTag: Optional[str]
-    appPID: Optional[str]
-    logLevel: int
-    namedProcesses: List[str]
-    catchallPackage: List[str]
+    pids_map: Dict[str, str]
+    last_tag: Optional[str]
+    app_pid: Optional[str]
+    log_level: int
+    named_processes: List[str]
+    catchall_packages: List[str]

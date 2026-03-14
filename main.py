@@ -5,16 +5,16 @@ import argparse
 
 from pathlib import Path
 
-from controller.Writer import Writer
-from controller.FileWriter import FileWriter
-from controller.ConsoleWriter import ConsoleWriter
+from controller.writer import Writer
+from controller.file_writer import FileWriter
+from controller.console_writer import ConsoleWriter
 
-from model.State import State
-from model.CliArgs import CliArgs
-from model.MockTTY import MockTTY
-from model.AdbDevice import AdbDevice
-from model.AdbState import AdbState
-from utils.Colored import Color, ColoredString
+from model.state import State
+from model.cli_args import CliArgs
+from model.mock_tty import MockTTY
+from model.adb_device import AdbDevice
+from model.adb_state import AdbState
+from utils.colored import Color, ColoredString
 
 from subprocess import PIPE, CompletedProcess
 from subprocess import run as processRun
@@ -141,39 +141,39 @@ VISIBLE_ACTIVITIES = re.compile(
 VISIBLE_PACKAGES = re.compile(r"ProcessRecord\{\w+\s*\d+:([a-zA-Z.]+)/\w+\}")
 
 
-def getVersion(name: str) -> str:
+def get_version(name: str) -> str:
     return f"{name} v{VERSION}"
 
 
-def getArgParser() -> argparse.ArgumentParser:
+def get_arg_parser() -> argparse.ArgumentParser:
     """Creates and returns the ArgumentParser instance."""
 
-    progName = Path(sys.argv[0]).stem
-    versionName = getVersion(progName)
+    prog_name = Path(sys.argv[0]).stem
+    version_name = get_version(prog_name)
 
     parser = argparse.ArgumentParser(
         add_help=False,
-        prog=progName,
-        description=f"{versionName}\nA colorized Android logcat viewer with advanced filtering capabilities.",
+        prog=prog_name,
+        description=f"{version_name}\nA colorized Android logcat viewer with advanced filtering capabilities.",
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    positionalArguments = parser.add_argument_group(title="Positional Arguments")
-    aboutOptions = parser.add_argument_group(title="Options")
-    devicesOptions = parser.add_argument_group(title="Device Options")
-    filteringOptions = parser.add_argument_group(title="Filtering Options")
-    formattingOptions = parser.add_argument_group(title="Formatting Options")
-    colorOptions = parser.add_argument_group(title="Color Options")
-    outputOptions = parser.add_argument_group(title="Output Options")
+    positional_arguments = parser.add_argument_group(title="Positional Arguments")
+    about_options = parser.add_argument_group(title="Options")
+    devices_options = parser.add_argument_group(title="Device Options")
+    filtering_options = parser.add_argument_group(title="Filtering Options")
+    formatting_options = parser.add_argument_group(title="Formatting Options")
+    color_options = parser.add_argument_group(title="Color Options")
+    output_options = parser.add_argument_group(title="Output Options")
 
-    positionalArguments.add_argument(
+    positional_arguments.add_argument(
         metavar="package(s)",
         dest="package",
         nargs="*",
         help="Application package name(s)\nThis can be specified multiple times",
     )
 
-    aboutOptions.add_argument(
+    about_options.add_argument(
         "-h",
         "--help",
         action="help",
@@ -181,41 +181,41 @@ def getArgParser() -> argparse.ArgumentParser:
         help="Show this help message and exit.",
     )
 
-    aboutOptions.add_argument(
+    about_options.add_argument(
         "-v",
         "--version",
         action="version",
-        version=versionName,
+        version=version_name,
         help="Print the version number and exit",
     )
 
-    devicesOptions.add_argument(
+    devices_options.add_argument(
         "-d",
         "--device",
-        dest="useDevice",
+        dest="use_device",
         action="store_true",
         default=False,
         help="Use first device for log input, default: %(default)s",
     )
 
-    devicesOptions.add_argument(
+    devices_options.add_argument(
         "-e",
         "--emulator",
-        dest="useEmulator",
+        dest="use_emulator",
         action="store_true",
         default=False,
         help="Use first emulator for log input, default: %(default)s",
     )
 
-    devicesOptions.add_argument(
+    devices_options.add_argument(
         "-s",
         "--serial",
         metavar="DEVICE_SERIAL",
-        dest="deviceSerial",
+        dest="device_serial",
         help="Device serial number",
     )
 
-    filteringOptions.add_argument(
+    filtering_options.add_argument(
         "-a",
         "--all",
         dest="all",
@@ -224,35 +224,35 @@ def getArgParser() -> argparse.ArgumentParser:
         help="Print log messages from all packages, default: %(default)s",
     )
 
-    filteringOptions.add_argument(
+    filtering_options.add_argument(
         "-k",
         "--keep",
-        dest="keepLogcat",
+        dest="keep_logcat",
         action="store_true",
         default=False,
         help="Keep the entire log before running, default: %(default)s",
     )
 
-    filteringOptions.add_argument(
+    filtering_options.add_argument(
         "-c",
         "--current",
-        dest="currentApp",
+        dest="current_app",
         action="store_true",
         default=False,
         help="Filter logcat by current running app(s), default: %(default)s",
     )
 
-    filteringOptions.add_argument(
+    filtering_options.add_argument(
         "-I",
         "--ignore-system-tags",
-        dest="ignoreSystemTags",
+        dest="ignore_system_tags",
         action="store_true",
         default=False,
         help="Filter output by ignoring known system tags, default: %(default)s"
         "\nUse --ignore-tag to ignore additional tags if needed",
     )
 
-    filteringOptions.add_argument(
+    filtering_options.add_argument(
         "-t",
         "--tag",
         metavar="TAG",
@@ -261,20 +261,20 @@ def getArgParser() -> argparse.ArgumentParser:
         help="Filter output by specified tag(s)\nThis can be specified multiple times, or as a comma separated list",
     )
 
-    filteringOptions.add_argument(
+    filtering_options.add_argument(
         "-i",
         "--ignore-tag",
         metavar="IGNORED_TAG",
-        dest="ignoreTag",
+        dest="ignore_tag",
         action="append",
         help="Filter output by ignoring specified tag(s)\n"
         "This can be specified multiple times, or as a comma separated list",
     )
 
-    filteringOptions.add_argument(
+    filtering_options.add_argument(
         "-l",
         "--log-level",
-        dest="logLevel",
+        dest="log_level",
         metavar=f"LEVEL [{'|'.join(LOG_LEVELS + LOG_LEVELS.lower())}]",
         type=str,
         choices=LOG_LEVELS + LOG_LEVELS.lower(),
@@ -282,7 +282,7 @@ def getArgParser() -> argparse.ArgumentParser:
         help="Filter messages lower than minimum log level, default: %(default)s",
     )
 
-    filteringOptions.add_argument(
+    filtering_options.add_argument(
         "-r",
         "--regex",
         metavar="REGEX",
@@ -291,86 +291,86 @@ def getArgParser() -> argparse.ArgumentParser:
         help="Filter output messages using the specified %(metavar)s",
     )
 
-    formattingOptions.add_argument(
+    formatting_options.add_argument(
         "-P",
         "--show-pid",
-        dest="showPID",
+        dest="show_pid",
         action="store_true",
         default=False,
         help="Show package name in output, default: %(default)s",
     )
 
-    formattingOptions.add_argument(
+    formatting_options.add_argument(
         "-p",
         "--show-package",
-        dest="showPackage",
+        dest="show_package",
         action="store_true",
         default=False,
         help="Show package name in output, default: %(default)s",
     )
 
-    formattingOptions.add_argument(
+    formatting_options.add_argument(
         "-S",
         "--always-show-tags",
-        dest="alwaysShowTags",
+        dest="always_show_tags",
         action="store_true",
         default=False,
         help="Always show the tag name, default: %(default)s",
     )
 
-    formattingOptions.add_argument(
+    formatting_options.add_argument(
         "-x",
         "--pid-width",
         metavar="WIDTH",
-        dest="pidWidth",
+        dest="pid_width",
         type=int,
         default=5,
         help="Width of PID column, default: %(default)s",
     )
 
-    formattingOptions.add_argument(
+    formatting_options.add_argument(
         "-n",
         "--package-width",
         metavar="WIDTH",
-        dest="packageWidth",
+        dest="package_width",
         type=int,
         default=20,
         help="Width of package/process name column, default: %(default)s",
     )
 
-    formattingOptions.add_argument(
+    formatting_options.add_argument(
         "-m",
         "--tag-width",
         metavar="WIDTH",
-        dest="tagWidth",
+        dest="tag_width",
         type=int,
         default=20,
         help="Width of tag column, default: %(default)s",
     )
 
-    colorOptions.add_argument(
+    color_options.add_argument(
         "-g",
         "--gc-color",
-        dest="gcColor",
+        dest="gc_color",
         action="store_true",
         default=False,
         help="Enable garbage collector messages colors, default: %(default)s",
     )
 
-    colorOptions.add_argument(
+    color_options.add_argument(
         "-N",
         "--no-color",
-        dest="noColor",
+        dest="no_color",
         action="store_true",
         default=False,
         help="Disable message colors, default: %(default)s",
     )
 
-    outputOptions.add_argument(
+    output_options.add_argument(
         "-o",
         "--output",
         metavar="FILE_PATH",
-        dest="outputPath",
+        dest="output_path",
         type=str,
         default="",
         help="Output filename",
@@ -379,7 +379,7 @@ def getArgParser() -> argparse.ArgumentParser:
     return parser
 
 
-def getConsoleWidth() -> int:
+def get_console_width() -> int:
     """Return the current terminal width"""
 
     width = shutil.get_terminal_size(fallback=(80, 20)).columns
@@ -387,11 +387,11 @@ def getConsoleWidth() -> int:
     return width
 
 
-def getWrappedIndent(
+def get_wrapped_indent(
     message: str | ColoredString,
     width: Optional[int],
-    headerSize: int,
-    showColors: bool,
+    header_size: int,
+    show_colors: bool,
     foreground: Optional[Color],
     background: Optional[Color],
 ) -> str | ColoredString:
@@ -401,49 +401,50 @@ def getWrappedIndent(
         return message
 
     message = message.replace("\t", "   ")
-    wrapArea = width - headerSize
-    messageBuffer = ""
+    wrap_area = width - header_size
+    message_buffer = ""
     current = 0
 
     while current < len(message):
-        nextIndex = min(current + wrapArea, len(message))
-        messageBuffer += message[current:nextIndex]
+        next_index = min(current + wrap_area, len(message))
+        message_buffer += message[current:next_index]
 
-        if nextIndex < len(message):
-            futureIndex = nextIndex + wrapArea
-            isLastLine = futureIndex >= len(message)
-            messageBuffer += "\n"
-            messageBuffer += " " * (headerSize - 4)
+        if next_index < len(message):
+            future_index = next_index + wrap_area
+            is_last_line = future_index >= len(message)
+            message_buffer += "\n"
+            message_buffer += " " * (header_size - 5)
 
-            connector = "   " if foreground == background else " ╠═" if not isLastLine else " ╚═"
-            coloredConnector = ColoredString(connector)
+            connector = "    " if foreground == background else " ╠═" if not is_last_line else " ╚═"
 
-            if foreground:
-                coloredConnector = coloredConnector.color(foreground)
+            if show_colors:
+                colored_connector = ColoredString(connector)
 
-            if background:
-                coloredConnector = coloredConnector.onColor(background)
+                if foreground:
+                    colored_connector = colored_connector.color(foreground)
 
-            if showColors:
-                messageBuffer += coloredConnector
+                if background:
+                    colored_connector = colored_connector.onColor(background)
+
+                message_buffer += colored_connector
             else:
-                messageBuffer += connector
-            messageBuffer += " "
-        current = nextIndex
+                message_buffer += connector
+            message_buffer += " "
+        current = next_index
 
-    return messageBuffer
+    return message_buffer
 
 
-def getTokenColor(tag: str) -> Color:
+def get_token_color(token: str) -> Color:
     """Allocates a unique color for a tag based on LRU."""
 
-    if tag not in KNOWN_TAGS:
+    if token not in KNOWN_TAGS:
         if TAG_COLORS:
-            KNOWN_TAGS[tag] = TAG_COLORS[0]
+            KNOWN_TAGS[token] = TAG_COLORS[0]
         else:
             return Color.White
 
-    color = KNOWN_TAGS[tag]
+    color = KNOWN_TAGS[token]
 
     if color in TAG_COLORS:
         TAG_COLORS.remove(color)
@@ -452,26 +453,26 @@ def getTokenColor(tag: str) -> Color:
     return color
 
 
-def getAdbCommand(args: CliArgs) -> List[str]:
+def get_adb_command(args: CliArgs) -> List[str]:
     """Constructs the base adb command list."""
 
-    baseAdbCommand = ["adb"]
+    base_adb_command = ["adb"]
 
-    if args.deviceSerial:
-        baseAdbCommand.extend(["-s", args.deviceSerial])
+    if args.device_serial:
+        base_adb_command.extend(["-s", args.device_serial])
 
-    if args.useDevice:
-        baseAdbCommand.append("-d")
+    if args.use_device:
+        base_adb_command.append("-d")
 
-    if args.useEmulator:
-        baseAdbCommand.append("-e")
+    if args.use_emulator:
+        base_adb_command.append("-e")
 
-    return baseAdbCommand
+    return base_adb_command
 
 
-def startAdbServer(baseAdbCommand: List[str]) -> Result[None, CompletedProcess[str]]:
-    startServerCommand = baseAdbCommand + list[str](["start-server"])
-    result = processRun(startServerCommand, stdout=PIPE, stderr=PIPE, text=True, errors="replace")
+def start_adb_server(base_adb_command: List[str]) -> Result[None, CompletedProcess[str]]:
+    start_server_command = base_adb_command + list[str](["start-server"])
+    result = processRun(start_server_command, stdout=PIPE, stderr=PIPE, text=True, errors="replace")
 
     if result.returncode != 0:
         return Err(result)
@@ -486,9 +487,9 @@ def startAdbServer(baseAdbCommand: List[str]) -> Result[None, CompletedProcess[s
     return Ok(None)
 
 
-def getAdbDevices(baseAdbCommand: List[str]) -> Optional[List[AdbDevice]]:
-    devicesListCommand = baseAdbCommand + list[str](["devices"])
-    result = processRun(devicesListCommand, stdout=PIPE, stderr=PIPE, text=True, errors="replace")
+def get_adb_devices(base_adb_command: List[str]) -> Optional[List[AdbDevice]]:
+    devices_list_command = base_adb_command + list[str](["devices"])
+    result = processRun(devices_list_command, stdout=PIPE, stderr=PIPE, text=True, errors="replace")
 
     if result.returncode != 0:
         return None
@@ -497,75 +498,73 @@ def getAdbDevices(baseAdbCommand: List[str]) -> Optional[List[AdbDevice]]:
     stdout = "\n".join([line for line in output.splitlines() if line])
     stdout = stdout.splitlines()[1:]
 
-    adbDevices = list[AdbDevice]()
+    adb_devices = list[AdbDevice]()
     for line in stdout:
-        deviceIdStr, deviceStateStr = regex.split(line)
-        adbDevices.append(AdbDevice(deviceIdStr, AdbState.fromStr(deviceStateStr)))
+        device_id_str, device_state_str = regex.split(line)
+        adb_devices.append(AdbDevice(device_id_str, AdbState.fromStr(device_state_str)))
 
-    if adbDevices:
-        return adbDevices
+    if adb_devices:
+        return adb_devices
 
     return None
 
 
-def getCurrentAppPackage(baseAdbCommand: List[str]) -> Optional[List[str]]:
+def get_current_app_package(base_adb_command: List[str]) -> Optional[List[str]]:
     """Gets the package name of the currently running app."""
 
-    systemDumpCommand = baseAdbCommand + [
+    system_dump_command = base_adb_command + [
         "shell",
         "dumpsys",
         "activity",
         "activities",
     ]
 
-    systemDump = processRun(systemDumpCommand, stdout=PIPE, stderr=PIPE, text=True, errors="replace").stdout
+    system_dump = processRun(system_dump_command, stdout=PIPE, stderr=PIPE, text=True, errors="replace").stdout
 
-    visibleActivities = re.search(VISIBLE_ACTIVITIES, systemDump)
+    visible_activities = re.search(VISIBLE_ACTIVITIES, system_dump)
 
-    if not visibleActivities:
+    if not visible_activities:
         return None
 
-    visiblePackages = re.findall(VISIBLE_PACKAGES, visibleActivities.group())
+    visible_packages = re.findall(VISIBLE_PACKAGES, visible_activities.group())
 
-    return visiblePackages if visiblePackages else None
+    return visible_packages if visible_packages else None
 
 
-def getProcesses(baseAdbCommand: List[str], catchallPackage: List[str], args: CliArgs) -> Dict[str, str]:
+def get_processes(base_adb_command: List[str], catchall_packages: List[str], args: CliArgs) -> Dict[str, str]:
     """Populates initial PIDs map {PID: PackageName} for catch-all packages or all processes if args.all is True."""
 
-    pidsMap = {}
-    psCommand = baseAdbCommand + ["shell", "ps"]
+    pids_map = dict[str, str]()
+    ps_command = base_adb_command + ["shell", "ps"]
 
-    psPid = ProcessOpen(psCommand, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-    psStdout = psPid.stdout
+    ps_pid = ProcessOpen(ps_command, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+    ps_stdout = ps_pid.stdout
 
-    while True and psStdout:
-        line = psStdout.readline().decode("utf-8", "replace").strip()
+    while True and ps_stdout:
+        line = ps_stdout.readline().decode("utf-8", "replace").strip()
 
         if not line:
             break
 
-        pidMatch = PID_LINE.match(line)
+        if (pid_match := PID_LINE.match(line)) is not None:
+            pid = pid_match.group(1)
+            process = pid_match.group(2)
 
-        if pidMatch is not None:
-            pid = pidMatch.group(1)
-            process = pidMatch.group(2)
-
-            isTargetPackage = process in catchallPackage
+            is_target_package = process in catchall_packages
 
             # If not using -a, only add targeted packages
-            if args.all or isTargetPackage:
-                pidsMap[pid] = process  # Store {PID: PackageName}
+            if args.all or is_target_package:
+                pids_map[pid] = process
 
-    return pidsMap
+    return pids_map
 
 
-def getDeadProcesses(
+def get_dead_processes(
     tag: str,
     message: str,
-    pidsSet: Set[str],
-    namedProcesses: List[str],
-    catchallPackage: List[str],
+    pids_set: Set[str],
+    named_processes: List[str],
+    catchall_packages: List[str],
 ) -> Tuple[Optional[str], Optional[str]]:
     """Parses log lines for process death and removal."""
 
@@ -573,74 +572,75 @@ def getDeadProcesses(
         return None, None
 
     for regex in (PID_KILL, PID_LEAVE, PID_DEATH):
-        match = regex.match(message)
-
-        if match:
+        if match := regex.match(message):
             # PID_KILL/PID_LEAVE/PID_DEATH have different group indices
             if regex == PID_KILL:
                 pid = match.group(1)
-                packageLine = match.group(2)
+                package_line = match.group(2)
             elif regex == PID_LEAVE:
                 pid = match.group(2)
-                packageLine = match.group(1)
+                package_line = match.group(1)
             else:  # PID_DEATH
                 pid = match.group(2)
-                packageLine = match.group(1)
+                package_line = match.group(1)
 
-            if isMatchingPackage(packageLine, namedProcesses, catchallPackage) and pid in pidsSet:
-                return pid, packageLine
+            is_a_matching_package = is_matching_package(
+                package_line,
+                named_processes,
+                catchall_packages,
+            )
+            if is_a_matching_package and pid in pids_set:
+                return pid, package_line
 
     return None, None
 
 
-def getStartedProcesses(line: str) -> Optional[Tuple[str, str, str, str, str]]:
+def get_started_processes(line: str) -> Optional[Tuple[str, str, str, str, str]]:
     """Parses log lines for process start."""
 
     for regex in (PID_START, PID_START_UGID, PID_START_DALVIK):
-        match = regex.match(line)
-
-        if match:
+        if match := regex.match(line):
             if regex == PID_START:
-                startedPackage = ""
-                startedPID = ""
-                startedPID, startedPackage, startedTarget = match.groups()
+                started_package = ""
+                started_pid = ""
+                started_pid, started_package, started_target = match.groups()
 
-                return startedPID, "", "", startedPackage, startedTarget
+                return started_pid, "", "", started_package, started_target
             elif regex == PID_START_UGID:
                 (
-                    startedPackage,
-                    startedTarget,
-                    startedPID,
-                    startedUID,
-                    startedGIDs,
+                    started_package,
+                    started_target,
+                    started_pid,
+                    started_uid,
+                    started_gids,
                 ) = match.groups()
 
-                return startedPID, startedUID, startedGIDs, startedPackage, startedTarget
+                return started_pid, started_uid, started_gids, started_package, started_target
             else:  # PID_START_DALVIK
-                startedPID, startedPackage, startedUID = match.groups()
+                started_pid, started_package, started_uid = match.groups()
 
-                return startedPID, startedUID, "", startedPackage, ""
+                return started_pid, started_uid, "", started_package, ""
 
     return None
 
 
-def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) -> None:
+def write_log_line(line: str, state: State, args: CliArgs, writers: List[Writer]) -> None:
     """Handles the processing and output of a single log line."""
 
-    pidsMap = state.pidsMap
-    lastTag = state.lastTag
-    appPID = state.appPID
-    logLevel = state.logLevel
-    namedProcesses = state.namedProcesses
-    catchallPackage = state.catchallPackage
-    pidWidth = args.pidWidth
-    packageWidth = args.packageWidth
-    tagWidth = args.tagWidth
-    headerSize = 0
+    pids_map = state.pids_map
+    last_tag = state.last_tag
+    app_pid = state.app_pid
+    log_level = state.log_level
+    named_processes = state.named_processes
+    catchall_packages = state.catchall_packages
+    pid_width = args.pid_width
+    package_width = args.package_width
+    tag_width = args.tag_width
+    header_width = 0
 
-    writerBuffers = [""] * len(writers)
+    writer_buffers = [""] * len(writers)
 
-    def writeToken(
+    def write_token(
         message: str | ColoredString,
         wrap: bool = False,
         foreground: Optional[Color] = None,
@@ -648,21 +648,21 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
     ) -> None:
         for index, writer in enumerate(writers):
             if wrap and writer.width:
-                buffer = getWrappedIndent(
+                buffer = get_wrapped_indent(
                     message,
                     writer.width,
-                    headerSize,
-                    writer.showColors,
+                    header_width,
+                    writer.show_colors,
                     foreground,
                     background,
                 )
             else:
                 buffer = message
 
-            if isinstance(buffer, ColoredString) and not writer.showColors:
-                buffer = buffer._raw
+            if isinstance(buffer, ColoredString) and not writer.show_colors:
+                buffer = buffer.raw
 
-            writerBuffers[index] += buffer
+            writer_buffers[index] += buffer
 
     if NATIVE_TAGS_LINE.match(line):
         return
@@ -672,120 +672,133 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
 
     level, tag, owner, message = logLine.groups()
     tag = tag.strip()
-    startedProcess = getStartedProcesses(line)
 
     # Calculate current base header size (level + spaces)
-    baseLevelSize = 3 + 1 + 1  # Level width + space
+    base_header_width = 3 + 1 + 1  # level width + 2 spaces between pid and package name and package name and tag name
 
+    if args.show_pid:
+        header_width += pid_width
+
+    if args.show_package:
+        header_width += package_width
+
+    header_width += 2 + tag_width + base_header_width
+                                                
     # Process Start/Death events
-    if startedProcess:
-        startedPID, startedUID, startedGIDs, startedPackage, startedTarget = startedProcess
-        if isMatchingPackage(startedPackage, namedProcesses, catchallPackage):
-            pidsMap[startedPID] = startedPackage
-            appPID = startedPID
+    if started_process := get_started_processes(line):
+        started_pid, started_uid, started_gids, started_package, started_target = started_process
+        if is_matching_package(started_package, named_processes, catchall_packages):
+            pids_map[started_pid] = started_package
+            app_pid = started_pid
 
             # Recalculate header size for process start/end messages
-            headerSize = (packageWidth + 7 if args.showPackage else 0) + args.tagWidth + baseLevelSize
+            header_width = (package_width + 7 if args.show_package else 0) + args.tag_width + base_header_width
 
-            writeToken(ColoredString(" " * (headerSize - 1)).color(Color.BrightGreen).onColor(Color.BrightGreen))
-            writeToken(f" Process {startedPackage} created for {startedTarget}\n", wrap=True)
+            write_token(ColoredString(" " * (header_width - 1)).color(Color.BrightGreen).onColor(Color.BrightGreen))
+            write_token(f" Process {started_package} created for {started_target}\n", wrap=True)
 
-            writeToken(ColoredString(" " * (headerSize - 1)).color(Color.BrightGreen).onColor(Color.BrightGreen))
-            writeToken(f" PID: {startedPID}   UID: {startedUID}   GIDs: {startedGIDs}")
-            writeToken("\n")
+            write_token(ColoredString(" " * (header_width - 1)).color(Color.BrightGreen).onColor(Color.BrightGreen))
+            write_token(f" PID: {started_pid}   UID: {started_uid}   GIDs: {started_gids}")
+            write_token("\n")
 
-            lastTag = None
-            
+            last_tag = None
+
             for index, writer in enumerate(writers):
-                writer.write(writerBuffers[index])
+                writer.write(writer_buffers[index])
                 writer.flush()
 
             return
 
-    deadPID, deadProcName = getDeadProcesses(tag, message, set(pidsMap.keys()), namedProcesses, catchallPackage)
-    if deadPID:
-        if deadPID in pidsMap:
-            del pidsMap[deadPID]
+    dead_pid, dead_process_name = get_dead_processes(
+        tag,
+        message,
+        set(pids_map.keys()),
+        named_processes,
+        catchall_packages,
+    )
+    if dead_pid:
+        if dead_pid in pids_map:
+            del pids_map[dead_pid]
 
-        headerSize = (packageWidth + 2 if args.showPackage else 0) + args.tagWidth + baseLevelSize
+        header_width = (package_width + 2 if args.show_package else 0) + args.tag_width + base_header_width
 
-        writeToken(ColoredString(" " * (headerSize - 1)).color(Color.BrightRed).onColor(Color.BrightRed))
-        writeToken(f" Process {deadProcName} (PID: {deadPID}) ended")
+        write_token(ColoredString(" " * (header_width - 1)).color(Color.BrightRed).onColor(Color.BrightRed))
+        write_token(f" Process {dead_process_name} (PID: {dead_pid}) ended")
 
-        lastTag = None
-        
+        last_tag = None
+
         for index, writer in enumerate(writers):
-            writer.write(writerBuffers[index])
+            writer.write(writer_buffers[index])
             writer.flush()
 
         return
 
     # Filter logs
-    if not args.all and owner not in pidsMap:
+    if not args.all and owner not in pids_map:
         return
 
-    if level in LOG_LEVELS_MAP and LOG_LEVELS_MAP[level] < logLevel:
+    if level in LOG_LEVELS_MAP and LOG_LEVELS_MAP[level] < log_level:
         return
 
-    if args.ignoreTag and isMatchingTag(tag, args.ignoreTag):
+    if args.ignore_tag and is_matching_tag(tag, args.ignore_tag):
         return
 
-    if args.tag and not isMatchingTag(tag, args.tag):
+    if args.tag and not is_matching_tag(tag, args.tag):
         return
 
     # Handle Backtrace for native crashes
     if tag == "DEBUG":
-        btLine = BACKTRACE_LINE.match(message.lstrip())
-        if btLine is not None:
+        backtrace_line = BACKTRACE_LINE.match(message.lstrip())
+        if backtrace_line is not None:
             message = message.lstrip()
-            owner = appPID  # Associate backtrace with the app PID
+            owner = app_pid  # Associate backtrace with the app PID
 
     # lineBuffer = ""
-    headerSize = 0
+    header_width = 0
 
     # --- OWNER PID SECTION ---
-    if args.showPID and owner:
-        pidColor = getTokenColor(owner)
+    if args.show_pid and owner:
+        pid_color = get_token_color(owner)
 
-        if len(owner) > pidWidth:
-            owner = f"{owner[: pidWidth - 1]}…"
-        pidDisplay = owner.ljust(pidWidth)
+        if len(owner) > pid_width:
+            owner = f"{owner[: pid_width - 1]}…"
+        pid_display = owner.ljust(pid_width)
 
-        writeToken(ColoredString(pidDisplay).color(pidColor))
-        writeToken(" ")  # one space separator
-        headerSize += pidWidth + 1
+        write_token(ColoredString(pid_display).color(pid_color))
+        write_token(" ")  # one space separator
+        header_width += pid_width + 1
     # ----------------------------
 
     # --- PACKAGE NAME SECTION ---
-    if args.showPackage and owner:
-        packageName = pidsMap.get(owner, f"UNKNOWN({owner})")
-        pkgColor = getTokenColor(packageName)
+    if args.show_package and owner:
+        package_name = pids_map.get(owner, f"UNKNOWN({owner})")
+        pkg_color = get_token_color(package_name)
 
-        if len(packageName) > packageWidth:
-            packageName = f"{packageName[: packageWidth - 1]}…"
-        pkgDisplay = packageName.ljust(packageWidth)
+        if len(package_name) > package_width:
+            package_name = f"{package_name[: package_width - 1]}…"
+        pkg_display = package_name.ljust(package_width)
 
-        writeToken(ColoredString(pkgDisplay).color(pkgColor))
-        writeToken(" ")  # one space separator
-        headerSize += packageWidth + 1
+        write_token(ColoredString(pkg_display).color(pkg_color))
+        write_token(" ")  # one space separator
+        header_width += package_width + 1
     # ----------------------------
 
     # --- TAG SECTION ---
-    if args.tagWidth > 0:
-        if tag != lastTag or args.alwaysShowTags:
-            lastTag = tag
-            color = getTokenColor(tag)
+    if args.tag_width > 0:
+        if tag != last_tag or args.always_show_tags:
+            last_tag = tag
+            tag_color = get_token_color(tag)
 
-            if len(tag) > tagWidth:
-                tag = f"{tag[: tagWidth - 1]}…"
-            tag = tag.rjust(tagWidth) if args.showPackage else tag.ljust(tagWidth)
+            if len(tag) > tag_width:
+                tag = f"{tag[: tag_width - 1]}…"
+            tag = tag.rjust(tag_width) if args.show_package else tag.ljust(tag_width)
 
-            writeToken(ColoredString(tag).color(color))
+            write_token(ColoredString(tag).color(tag_color))
         else:
-            writeToken(" " * tagWidth)
+            write_token(" " * tag_width)
 
-        writeToken(" ")
-        headerSize += tagWidth + 1
+        write_token(" ")  # one space separator
+        header_width += tag_width + 1
     # ----------------------------
 
     # --- LEVEL SECTION ---
@@ -798,11 +811,14 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
         "F": Color.TrueColor(250, 65, 25),
         "V": Color.BrightCyan,
     }.get(level, Color.Black)
-    levelStr = ColoredString(f" {level} ").color(foreground).onColor(background)
-    writeToken(levelStr)
-    writeToken(" ")
-    headerSize += len(levelStr._raw) + 1 # Level width + space
+
+    level = ColoredString(f" {level} ").color(foreground).onColor(background)
+
+    write_token(level)
+    write_token(" ")  # one space separator
     # ----------------------------
+
+    header_width += base_header_width
 
     # --- MESSAGE SECTION --- (apply rules)
     if match := STRICT_MODE.match(message):
@@ -810,28 +826,26 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
         message += f"{ColoredString(match[2]).color(Color.BrightRed)}"
         message += f"{ColoredString(match[3]).color(Color.BrightYellow)}"
 
-    if args.gcColor and (match := GC_COLOR.match(message)):
-        message = (
-            f"{match[1]}"
-            f"{ColoredString(match[2]).color(Color.BrightGreen)}"
-            f"{match[3]}"
-            f"{ColoredString(match[4]).color(Color.BrightYellow)}"
-        )
+    if args.gc_color and (match := GC_COLOR.match(message)):
+        message = f"{match[1]}"
+        message += f"{ColoredString(match[2]).color(Color.BrightGreen)}"
+        message += f"{match[3]}"
+        message += f"{ColoredString(match[4]).color(Color.BrightYellow)}"
 
-    writeToken(message, wrap=True, foreground=foreground, background=background)
-    writeToken("\n")
-
+    write_token(message, wrap=True, foreground=foreground, background=background)
+    write_token("\n")
+    header_width += 1
     for index, writer in enumerate(writers):
-        writer.write(writerBuffers[index])
+        writer.write(writer_buffers[index])
         writer.flush()
     # ----------------------------
 
     # Update state for next line
-    state.lastTag = lastTag
-    state.appPID = appPID
+    state.last_tag = last_tag
+    state.app_pid = app_pid
 
 
-def isMatchingPackage(token: str, namedProcesses: List[str], catchallPackage: List[str]) -> bool:
+def is_matching_package(token: str, namedProcesses: List[str], catchallPackage: List[str]) -> bool:
     """Checks if a process token matches any of the package filters."""
 
     if not catchallPackage and not namedProcesses:
@@ -845,16 +859,16 @@ def isMatchingPackage(token: str, namedProcesses: List[str], catchallPackage: Li
     return (token in catchallPackage) if index == -1 else (token[:index] in catchallPackage)
 
 
-def isMatchingTag(tag: str, tags: List[str]) -> bool:
+def is_matching_tag(tag: str, tags: List[str]) -> bool:
     """Checks if a tag matches any of the given tag regex patterns."""
 
-    for mTag in map(str.strip, tags):
+    for m_tag in map(str.strip, tags):
         # If the pattern contains regex special chars, treat as regex
-        if any(mChar in mTag for mChar in r".*+?[]{}()|\^$") and re.match(rf"{mTag}", tag):
+        if any(m_char in m_tag for m_char in r".*+?[]{}()|\^$") and re.match(rf"{m_tag}", tag):
             return True
 
         # Otherwise, do substring matching (contains)
-        elif mTag in tag:
+        elif m_tag in tag:
             return True
 
     return False
@@ -871,141 +885,128 @@ def main() -> None:
     - Starting the logcat process
     - Writing the logcat output to the console or a file
     """
-    parser = getArgParser()
+    parser = get_arg_parser()
     args = parser.parse_args()
 
     args = CliArgs(**vars(args))
 
     try:
-        baseAdbCommand = getAdbCommand(args)
-        adbCommand = baseAdbCommand + ["logcat", "-v", "brief"]
-        logLevel = LOG_LEVELS_MAP[args.logLevel.upper()]
-        consoleWidth = getConsoleWidth()
-        consoleWriter = ConsoleWriter(width=consoleWidth, showColors=not args.noColor)
-        writers = list[Writer]([consoleWriter])
+        base_adb_command = get_adb_command(args)
+        adb_command = base_adb_command + ["logcat", "-v", "brief"]
+        log_level = LOG_LEVELS_MAP[args.log_level.upper()]
+        console_width = get_console_width()
+        console_writer = ConsoleWriter(width=console_width, show_colors=not args.no_color)
+        writers = list[Writer]([console_writer])
         packages = list(set(args.package))
 
-        if args.ignoreSystemTags:
-            args.ignoreTag = [f"^{systemTag.strip()}$" for systemTag in SYSTEM_TAGS]
+        if args.ignore_system_tags:
+            args.ignore_tag = [f"^{systemTag.strip()}$" for systemTag in SYSTEM_TAGS]
 
-        if args.ignoreTag:
-            args.ignoreTag = [tag.strip() for tag_arg in args.ignoreTag for tag in tag_arg.split(",")]
+        if args.ignore_tag:
+            args.ignore_tag = [tag.strip() for tag_arg in args.ignore_tag for tag in tag_arg.split(",")]
 
         if args.tag:
             args.tag = [tag.strip() for tag_arg in args.tag for tag in tag_arg.split(",")]
 
-        if args.outputPath:
-            outputFile = open(args.outputPath, "w+", encoding="utf-8")
-            fileWriter = FileWriter(outputFile=outputFile)
-            writers.append(fileWriter)
+        if args.output_path:
+            output_file = open(args.output_path, "w+", encoding="utf-8")
+            file_writer = FileWriter(outputFile=output_file)
+            writers.append(file_writer)
 
-        if args.currentApp:
-            runningPackages = getCurrentAppPackage(baseAdbCommand)
-            packages += runningPackages if runningPackages else []
+        if args.current_app:
+            running_packages = get_current_app_package(base_adb_command)
+            packages += running_packages if running_packages else []
 
         if args.regex:
-            adbCommand.extend(["-e", args.regex])
+            adb_command.extend(["-e", args.regex])
 
         if sys.stdin.isatty():
-            message = ColoredString("Starting ADB Server…").color(Color.BrightCyan)
-            print(message)
+            msg = ColoredString("Starting ADB Server…").color(Color.BrightCyan)
+            print(msg)
 
-            match startAdbServer(baseAdbCommand):
+            match start_adb_server(base_adb_command):
                 case Err() as err:
                     err = CompletedProcess[str](**vars(err.err_value))
-                    errHdr = ColoredString(f"ERROR: {err.stderr.strip()}").color(Color.BrightRed).bold()
-                    errMsg = (
-                        ColoredString("Could not start ADB server, check that ADB is added to env PATH and try again!")
-                        .color(Color.BrightRed)
-                        .bold()
-                    )
+                    err_hdr = f"ERROR: {err.stderr.strip()}"
+                    err_msg = "Could not start ADB server, check that ADB is added to env PATH and try again!"
 
-                    print(errHdr, file=sys.stderr)
-                    print(errMsg, file=sys.stderr)
+                    print(ColoredString(err_hdr).color(Color.BrightCyan).bold(), file=sys.stderr)
+                    print(ColoredString(err_msg).color(Color.BrightCyan).bold(), file=sys.stderr)
                     sys.exit(err.returncode)
 
-            match getAdbDevices(baseAdbCommand):
+            match get_adb_devices(base_adb_command):
                 # TODO: implement device selection
                 case [AdbDevice(), *_] as devices:
                     for index, device in enumerate(devices):
-                        message = ColoredString(f"Found Device #{index}: {device}").color(Color.BrightCyan).bold()
-                        print(message)
+                        msg = f"Found Device #{index}: {device}"
+                        print(ColoredString(msg).color(Color.BrightCyan).bold(), file=sys.stderr)
                 case None:
-                    errHdr = ColoredString("ERROR: not connected").color(Color.BrightRed).bold()
-                    errMsg = (
-                        ColoredString("ADB cannot find any attached devices, attach a device and try again!")
-                        .color(Color.BrightRed)
-                        .bold()
-                    )
+                    err_hdr = "ERROR: not connected"
+                    err_msg = "ADB cannot find any attached devices, attach a device and try again!"
 
-                    print(errHdr, file=sys.stderr)
-                    print(errMsg, file=sys.stderr)
+                    print(ColoredString(err_hdr).color(Color.BrightCyan).bold(), file=sys.stderr)
+                    print(ColoredString(err_msg).color(Color.BrightCyan).bold(), file=sys.stderr)
                     sys.exit(2)
 
-            if not args.keepLogcat:
-                adbClearCommand = baseAdbCommand + ["logcat", "-c"]
-                processRun(adbClearCommand, check=False)
+            if not args.keep_logcat:
+                adb_clear_command = base_adb_command + ["logcat", "-c"]
+                processRun(adb_clear_command, check=False)
 
         if packages:
-            print(f"Capturing logcat messages from packages: [{', '.join(packages)}]…")
+            msg = f"Capturing logcat messages from packages: [{', '.join(packages)}]…"
         else:
             args.all = True
-            print("Capturing logcat messages…")
+            msg = "Capturing logcat messages…"
+
+        print(ColoredString(msg).color(Color.BrightCyan))
 
         # Determine exact processes vs. catch-all packages
-        catchallPackage = list(filter(lambda package: package.find(":") == -1, packages))
-        namedProcesses = list(filter(lambda package: package.find(":") != -1, packages))
-        namedProcesses = list(map(lambda package: package[:-1] if package.endswith(":") else package, namedProcesses))
-        pidsMap = getProcesses(baseAdbCommand, catchallPackage, args)
-
-        adbPID = ProcessOpen(adbCommand, stdout=PIPE, stderr=PIPE) if sys.stdin.isatty() else MockTTY()
-        logStream = adbPID.stdout
-
-        state = State(
-            pidsMap=pidsMap,
-            lastTag=None,
-            appPID=None,
-            logLevel=logLevel,
-            namedProcesses=namedProcesses,
-            catchallPackage=catchallPackage,
+        catchall_packages = list[str](filter(lambda package: package.find(":") == -1, packages))
+        named_processes = list[str](filter(lambda package: package.find(":") != -1, packages))
+        named_processes = list[str](
+            map(lambda package: package[:-1] if package.endswith(":") else package, named_processes)
         )
+        pids_map = get_processes(base_adb_command, catchall_packages, args)
 
-        while adbPID.poll() is None and logStream:
-            rawLine = logStream.readline()
+        adb_pid = ProcessOpen(adb_command, stdout=PIPE, stderr=PIPE) if sys.stdin.isatty() else MockTTY()
+        log_stream = adb_pid.stdout
 
-            if not rawLine:
+        state = State(pids_map, None, None, log_level, named_processes, catchall_packages)
+
+        while adb_pid.poll() is None and log_stream:
+            raw_line = log_stream.readline()
+
+            if not raw_line:
                 break
 
             # Check if the stream is binary (like ProcessOpen stdout), which returns bytes
-            if isinstance(rawLine, bytes):
-                line = rawLine.decode(encoding="utf-8", errors="replace").strip()
+            if isinstance(raw_line, bytes):
+                line = raw_line.decode(encoding="utf-8", errors="replace").strip()
             # Otherwise, assume it's a text stream (like sys.stdin), which returns str
             else:
-                line = str(rawLine).strip()
+                line = str(raw_line).strip()
 
             # Update the writers width if changed
             # writers with width set to None are not
             # console writers and should not be updated
             for writer in filter(lambda writer: writer.width, writers):
-                writer.width = getConsoleWidth()
+                writer.width = get_console_width()
 
-            writeLogLine(line=line, state=state, args=args, writers=writers)
+            write_log_line(line=line, state=state, args=args, writers=writers)
 
     except RuntimeError as ex:
         err = CompletedProcess[str](**vars(ex.args[0]))
-        errHdr = ColoredString(f"ERROR: {err.stderr.strip()}").color(Color.BrightRed)
-        errMsg = ColoredString("Could not start ADB server, check that ADB is added to env PATH and try again!").color(
-            Color.Red
-        )
+        err_hdr = f"ERROR: {err.stderr.strip()}"
+        err_msg = "Could not start ADB server, check that ADB is added to env PATH and try again!"
 
         if sys.stdin.isatty():
-            print(errHdr, file=sys.stderr)
-            print(errMsg, file=sys.stderr)
+            print(ColoredString(err_hdr).color(Color.BrightCyan).bold(), file=sys.stderr)
+            print(ColoredString(err_msg).color(Color.BrightCyan).bold(), file=sys.stderr)
             sys.exit(err.returncode)
     except KeyboardInterrupt:
-        msg = ColoredString(f"{Path(parser.prog).stem} stopped by user!").color(Color.BrightCyan)
+        msg = f"{Path(parser.prog).stem} stopped by user!"
 
-        print(msg, file=sys.stderr)
+        print(ColoredString(msg).color(Color.BrightCyan).bold(), file=sys.stderr)
     finally:
         # Cleanup
         for writer in writers:
