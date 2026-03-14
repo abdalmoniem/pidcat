@@ -4,9 +4,17 @@ import os
 import sys
 import glob
 import shutil
-import argparse
 import threading
-import subprocess
+
+from argparse import SUPPRESS
+from argparse import Namespace
+from argparse import ArgumentParser
+
+from dataclasses import dataclass
+
+from enum import StrEnum
+from pathlib import Path
+from io import TextIOWrapper
 
 from typing import cast
 from typing import List
@@ -14,21 +22,20 @@ from typing import Union
 from typing import TextIO
 from typing import Optional
 
-from enum import StrEnum
-from pathlib import Path
 from subprocess import PIPE
-from io import TextIOWrapper
-from dataclasses import dataclass
+from subprocess import CalledProcessError
+from subprocess import Popen as ProcessOpen
 
-from utils.colored import Color, ColoredString
+from utils.colored import Color
+from utils.colored import ColoredString
+from utils.pyproject import get_metadata
+from utils.pyproject import PY_PROJECT_FILE
 
 sys_stdout = cast(TextIOWrapper, sys.stdout)
 sys_stderr = cast(TextIOWrapper, sys.stderr)
 
 sys_stdout.reconfigure(encoding="utf-8")
 sys_stderr.reconfigure(encoding="utf-8")
-
-VERSION = "2.6.1"
 
 TAB_WIDTH = 4
 TAB_CHAR = " " * TAB_WIDTH
@@ -46,6 +53,8 @@ setup_script_path = str(Path(script_dir).joinpath("setup"))
 setup_output_path = str(Path(setup_script_path).joinpath("Output"))
 setup_script = str(Path(setup_script_path).joinpath("setup.iss"))
 version_info_script = str(Path(script_dir).joinpath("resources", "version_info.py"))
+pycache_dirs = list(Path(".").glob("*/__pycache__"))
+metadata = get_metadata()
 
 
 class CommandName(StrEnum):
@@ -106,7 +115,7 @@ class Command:
         CommandType = Union[Clean, Build, Rebuild]
 
     @staticmethod
-    def from_args(args: argparse.Namespace) -> CommandType:
+    def __from_args__(args: Namespace) -> CommandType:
         match CommandName(args.command):
             case CommandName.Clean:
                 return Command.Clean()
@@ -125,149 +134,140 @@ class Command:
             case _:
                 raise ValueError(f"Unknown Command '{args.command}'")
 
+    @staticmethod
+    def parse_args() -> CommandType:
+        """Creates and returns the ArgumentParser instance."""
 
-def get_arg_parser() -> argparse.ArgumentParser:
-    """Creates and returns the ArgumentParser instance."""
+        helpParent = ArgumentParser(add_help=False)
+        helpParent.add_argument(
+            "-h",
+            "--help",
+            action="help",
+            default=SUPPRESS,
+            help="Show this help message and exit",
+        )
 
-    helpParent = argparse.ArgumentParser(add_help=False)
-    helpParent.add_argument(
-        "-h",
-        "--help",
-        action="help",
-        default=argparse.SUPPRESS,
-        help="Show this help message and exit",
-    )
-
-    parser = argparse.ArgumentParser(
-        add_help=False,
-        parents=[helpParent],
-        prog=Path(sys.argv[0]).stem,
-        description="Builds the PidCat executable using PyInstaller",
-    )
-
-    aboutOptions = parser.add_argument_group(title="Options")
-
-    aboutOptions.add_argument(
-        "-v",
-        "--version",
-        action="version",
-        version=f"{Path(parser.prog).stem} v{VERSION}",
-        help="Print the version number and exit",
-    )
-
-    subParsers = parser.add_subparsers(dest="command", metavar="COMMAND")
-
-    subParsers.add_parser(
-        CommandName.Clean,
-        add_help=False,
-        parents=[helpParent],
-        help="Clean generated files",
-        description="Clean generated files",
-    )
-
-    subParsers.add_parser(
-        CommandName.Build,
-        add_help=False,
-        parents=[helpParent],
-        help="Build the executable using PyInstaller",
-        description="Build the executable using PyInstaller",
-    )
-
-    subParsers.add_parser(
-        CommandName.Rebuild,
-        add_help=False,
-        parents=[helpParent],
-        help="Rebuild the executable package",
-        description="Rebuild the executable package",
-    )
-
-    if IS_WINDOWS:
-        subParsers.add_parser(
-            CommandName.BuildInstaller,
+        parser = ArgumentParser(
             add_help=False,
             parents=[helpParent],
-            help="Build the installer using Inno Setup Compiler",
-            description="Build the installer using Inno Setup Compiler",
-        ).add_argument(
-            "-p",
-            "--iscc-path",
-            metavar="ISCC_PATH",
-            dest="iscc_path",
-            action="store",
-            default=None,
-            help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
+            prog=Path(sys.argv[0]).stem,
+            description=f"Builds the {metadata.name} executable using PyInstaller",
+        )
+
+        aboutOptions = parser.add_argument_group(title="Options")
+
+        aboutOptions.add_argument(
+            "-v",
+            "--version",
+            action="version",
+            version=f"{Path(parser.prog).stem} v{metadata.version}",
+            help="Print the version number and exit",
+        )
+
+        subParsers = parser.add_subparsers(dest="command", metavar="COMMAND")
+
+        subParsers.add_parser(
+            CommandName.Clean,
+            add_help=False,
+            parents=[helpParent],
+            help="Clean generated files",
+            description="Clean generated files",
         )
 
         subParsers.add_parser(
-            CommandName.BuildAll,
+            CommandName.Build,
             add_help=False,
             parents=[helpParent],
-            help="Build both the executable and installer packages",
-            description="Build both the executable and installer packages",
-        ).add_argument(
-            "-p",
-            "--iscc-path",
-            metavar="ISCC_PATH",
-            dest="iscc_path",
-            action="store",
-            default=None,
-            help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
+            help="Build the executable using PyInstaller",
+            description="Build the executable using PyInstaller",
         )
 
         subParsers.add_parser(
-            CommandName.Install,
+            CommandName.Rebuild,
             add_help=False,
             parents=[helpParent],
-            help="Install the application by running the generated installer",
-            description="Install the application by running the generated installer",
+            help="Rebuild the executable package",
+            description="Rebuild the executable package",
         )
+
+        if IS_WINDOWS:
+            subParsers.add_parser(
+                CommandName.BuildInstaller,
+                add_help=False,
+                parents=[helpParent],
+                help="Build the installer using Inno Setup Compiler",
+                description="Build the installer using Inno Setup Compiler",
+            ).add_argument(
+                "-p",
+                "--iscc-path",
+                metavar="ISCC_PATH",
+                dest="iscc_path",
+                action="store",
+                default=None,
+                help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
+            )
+
+            subParsers.add_parser(
+                CommandName.BuildAll,
+                add_help=False,
+                parents=[helpParent],
+                help="Build both the executable and installer packages",
+                description="Build both the executable and installer packages",
+            ).add_argument(
+                "-p",
+                "--iscc-path",
+                metavar="ISCC_PATH",
+                dest="iscc_path",
+                action="store",
+                default=None,
+                help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
+            )
+
+            subParsers.add_parser(
+                CommandName.Install,
+                add_help=False,
+                parents=[helpParent],
+                help="Install the application by running the generated installer",
+                description="Install the application by running the generated installer",
+            )
+
+            subParsers.add_parser(
+                CommandName.Reinstall,
+                add_help=False,
+                parents=[helpParent],
+                help="Rebuild, build installer, and install",
+                description="Rebuild, build installer, and install",
+            ).add_argument(
+                "-p",
+                "--iscc-path",
+                metavar="ISCC_PATH",
+                dest="iscc_path",
+                action="store",
+                default=None,
+                help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
+            )
 
         subParsers.add_parser(
-            CommandName.Reinstall,
+            "help",
             add_help=False,
             parents=[helpParent],
-            help="Rebuild, build installer, and install",
-            description="Rebuild, build installer, and install",
-        ).add_argument(
-            "-p",
-            "--iscc-path",
-            metavar="ISCC_PATH",
-            dest="iscc_path",
-            action="store",
-            default=None,
-            help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
-        )
+            help="Show this help message or the help of a command and exit",
+            description="Show this help message or the help of a command and exit",
+        ).add_argument("helpCommand", nargs="?", metavar="COMMAND", help="Command to show help for")
 
-    subParsers.add_parser(
-        "help",
-        add_help=False,
-        parents=[helpParent],
-        help="Show this help message or the help of a command and exit",
-        description="Show this help message or the help of a command and exit",
-    ).add_argument("helpCommand", nargs="?", metavar="COMMAND", help="Command to show help for")
+        args = parser.parse_args()
 
-    return parser
+        if not args.command:
+            parser.print_help()
+            sys.exit(0)
 
+        if args.command == CommandName.Help:
+            parser.parse_args(split_args(f"{args.helpCommand} --help") if args.helpCommand else split_args("--help"))
+            sys.exit(0)
 
-def update_main_script_version() -> None:
-    """
-    Updates the version string in the main script file.
+        command = Command.__from_args__(args)
 
-    This function reads the main script file, updates the version string,
-    and writes the updated content back to the file.
-    """
-
-    with open(file=main_script, mode="r+", encoding="utf-8") as fd:
-        lines = fd.readlines()
-
-        fd.seek(0)
-        fd.truncate()
-
-        for line in lines:
-            if line.strip().startswith("VERSION"):
-                fd.write(f'VERSION = "{VERSION}"\n')
-            else:
-                fd.write(line)
+        return command
 
 
 def update_setup_script_version() -> None:
@@ -286,7 +286,7 @@ def update_setup_script_version() -> None:
 
         for line in lines:
             if line.strip().startswith("#define AppVersion"):
-                fd.write(f'#define AppVersion "{VERSION}"\n')
+                fd.write(f'#define AppVersion "{metadata.version}"\n')
             else:
                 fd.write(line)
 
@@ -299,8 +299,8 @@ def update_version_info_script_version() -> None:
     and writes the updated content back to the file.
     """
 
-    version_parts = VERSION.split(".")
-    version_tuple = tuple(int(versionPart) for versionPart in version_parts) + (0,) * (4 - len(version_parts))
+    assert metadata.version, f"version not defined in {PY_PROJECT_FILE}"
+    version_tuple = metadata.version.release + (0,)
 
     with open(file=version_info_script, mode="r+", encoding="utf-8") as fd:
         lines = fd.readlines()
@@ -314,15 +314,18 @@ def update_version_info_script_version() -> None:
             elif "prodvers=" in line:
                 fd.write(f"{TAB_CHAR}prodvers={version_tuple},\n")
             elif 'StringStruct("FileVersion"' in line:
-                fd.write(f'{TAB_CHAR * 6}StringStruct("FileVersion", "{VERSION}"),  # Matches "File version"\n')
+                fd.write(
+                    f'{TAB_CHAR * 6}StringStruct("FileVersion", "{metadata.version}"),  # Matches "File version"\n'
+                )
             elif 'StringStruct("ProductVersion"' in line:
-                fd.write(f'{TAB_CHAR * 6}StringStruct("ProductVersion", "{VERSION}"),  # Matches "Product version"\n')
+                fd.write(
+                    f'{TAB_CHAR * 6}StringStruct("ProductVersion", "{metadata.version}"),  # Matches "Product version"\n'
+                )
             else:
                 fd.write(line)
 
 
 def update_versions() -> None:
-    update_main_script_version()
     update_setup_script_version()
     update_version_info_script_version()
 
@@ -336,6 +339,8 @@ def clean() -> None:
     shutil.rmtree(path=generated_path, ignore_errors=True)
     shutil.rmtree(path=setup_output_path, ignore_errors=True)
 
+    for dir in pycache_dirs:
+        shutil.rmtree(dir, ignore_errors=True)
 
 def run_command(command: list[str], err_msg: str | None = None) -> None:
     """
@@ -389,7 +394,7 @@ def run_command(command: list[str], err_msg: str | None = None) -> None:
         print(error, file=sys.stderr)
 
     try:
-        pid = subprocess.Popen(
+        pid = ProcessOpen(
             command,
             stdout=PIPE,
             stderr=PIPE,
@@ -413,14 +418,14 @@ def run_command(command: list[str], err_msg: str | None = None) -> None:
 
         if pid.returncode != 0:
             erroneousCommand = " ".join(command)
-            raise subprocess.CalledProcessError(pid.returncode, erroneousCommand, stderr="\n".join(stderr))
+            raise CalledProcessError(pid.returncode, erroneousCommand, stderr="\n".join(stderr))
 
     except KeyboardInterrupt:
         error = ColoredString("\nProcess interrupted by user").color(Color.Red)
         print(error, file=sys.stderr)
 
         sys.exit(0)
-    except subprocess.CalledProcessError as ex:
+    except CalledProcessError as ex:
         error = ColoredString("\nERRORS:").color(Color.Red)
         print(error, file=sys.stderr)
 
@@ -456,7 +461,6 @@ def run_py_installer() -> None:
     )
 
     command = [
-        # "pyinstaller",
         sys.executable,
         "-c",
         pyinstallerLogConfig,
@@ -468,7 +472,8 @@ def run_py_installer() -> None:
         f"--specpath={generated_path}",
         f"--icon={icon_path}",
         f"--version-file={version_path}",
-        "--name=pidcat",
+        f"--name={metadata.name}",
+        f"--add-data={PY_PROJECT_FILE}{os.pathsep}.",
         main_script,
     ]
 
@@ -542,20 +547,9 @@ def main() -> None:
     install the application, reinstall the application, or run the installer based on the arguments provided.
     """
 
-    parser = get_arg_parser()
-    args = parser.parse_args()
+    command = Command.parse_args()
 
-    if not args.command:
-        parser.print_help()
-        sys.exit(0)
-
-    if args.command == CommandName.Help:
-        parser.parse_args(split_args(f"{args.helpCommand} --help") if args.helpCommand else split_args("--help"))
-        sys.exit(0)
-
-    command = Command.from_args(args)
-
-    print(f"[*] Building PidCat v{VERSION}...")
+    print(f"[*] Building {metadata.name} v{metadata.version}...")
 
     print("[*] Updating version information...")
     update_versions()

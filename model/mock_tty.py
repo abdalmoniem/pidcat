@@ -1,7 +1,10 @@
 import sys
+
+from io import TextIOWrapper
+
 from typing import TextIO
 from typing import Optional
-from io import TextIOWrapper
+
 from subprocess import Popen as ProcessOpen
 
 

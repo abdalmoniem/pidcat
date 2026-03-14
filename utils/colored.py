@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from builtins import str
 from typing import Optional
-from enum import IntEnum, auto
+
+from enum import auto
+from enum import IntEnum
 
 
 class Color(IntEnum):
@@ -43,82 +45,82 @@ class Style:
 
 class ColoredString(str):
     def __init__(self, string: str = ""):
-        self._raw: str = string
-        self._style: Style = Style()
+        self.__raw__: str = string
+        self.__style__: Style = Style()
 
-    def _render(self) -> ColoredString:
+    def __render__(self) -> ColoredString:
         codes = list[str]()
-        if self._style.bold:
+        if self.__style__.bold:
             codes.append("1")
-        if self._style.dim:
+        if self.__style__.dim:
             codes.append("2")
-        if self._style.italic:
+        if self.__style__.italic:
             codes.append("3")
-        if self._style.underline:
+        if self.__style__.underline:
             codes.append("4")
-        if self._style.blink:
+        if self.__style__.blink:
             codes.append("5")
-        if self._style.reversed:
+        if self.__style__.reversed:
             codes.append("7")
-        if self._style.strikethrough:
+        if self.__style__.strikethrough:
             codes.append("9")
-        if self._style.foreground is not None:
-            if isinstance(self._style.foreground, str):
-                codes.append(f"38;{self._style.foreground}")
+        if self.__style__.foreground is not None:
+            if isinstance(self.__style__.foreground, str):
+                codes.append(f"38;{self.__style__.foreground}")
             else:
-                codes.append(f"{self._style.foreground.value}")
-        if self._style.background is not None:
-            if isinstance(self._style.background, str):
-                codes.append(f"48;{self._style.background}")
+                codes.append(f"{self.__style__.foreground.value}")
+        if self.__style__.background is not None:
+            if isinstance(self.__style__.background, str):
+                codes.append(f"48;{self.__style__.background}")
             else:
-                codes.append(f"{10 + self._style.background.value}")
+                codes.append(f"{10 + self.__style__.background.value}")
 
-        ansi = f"\033[{';'.join(map(str, codes))}m{self._raw}\033[0m" if codes else self._raw
+        ansi = f"\033[{';'.join(map(str, codes))}m{self.__raw__}\033[0m" if codes else self.__raw__
         new = ColoredString(ansi)
-        new._raw = self._raw
-        new._style = self._style
+        new.__raw__ = self.__raw__
+        new.__style__ = self.__style__
         return new
 
     def color(self, foreground: Color) -> ColoredString:
-        self._style.foreground = foreground
-        return self._render()
+        self.__style__.foreground = foreground
+        return self.__render__()
 
     def onColor(self, background: Color) -> ColoredString:
-        self._style.background = background
-        return self._render()
+        self.__style__.background = background
+        return self.__render__()
 
     def bold(self) -> ColoredString:
-        self._style.bold = True
-        return self._render()
+        self.__style__.bold = True
+        return self.__render__()
 
     def dim(self) -> ColoredString:
-        self._style.dim = True
-        return self._render()
+        self.__style__.dim = True
+        return self.__render__()
 
     def italic(self) -> ColoredString:
-        self._style.italic = True
-        return self._render()
+        self.__style__.italic = True
+        return self.__render__()
 
     def underline(self) -> ColoredString:
-        self._style.underline = True
-        return self._render()
+        self.__style__.underline = True
+        return self.__render__()
 
     def blink(self) -> ColoredString:
-        self._style.blink = True
-        return self._render()
+        self.__style__.blink = True
+        return self.__render__()
 
     def reversed(self) -> ColoredString:
-        self._style.reversed = True
-        return self._render()
+        self.__style__.reversed = True
+        return self.__render__()
 
     def strikethrough(self) -> ColoredString:
-        self._style.strikethrough = True
-        return self._render()
+        self.__style__.strikethrough = True
+        return self.__render__()
 
     @property
     def raw(self):
-        return self._raw
+        return self.__raw__
 
     def reset(self) -> ColoredString:
-        self._style = Style()
-        return ColoredString(self._raw)
+        self.__style__ = Style()
+        return ColoredString(self.__raw__)
