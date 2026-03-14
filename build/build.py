@@ -8,17 +8,19 @@ import argparse
 import threading
 import subprocess
 
+from typing import cast
+from typing import List
+from typing import Union
+from typing import TextIO
+from typing import Optional
+
 from enum import StrEnum
 from pathlib import Path
 from subprocess import PIPE
 from io import TextIOWrapper
 from dataclasses import dataclass
-from typing import cast, List, Optional, TextIO, Union
 
-sys.path.append(str(Path(__file__).parent.parent))
-
-from utils.terminalColors import RED
-from utils.terminalColors import colorize
+from utils.Colored import Color, ColoredString
 
 sysStdout = cast(TextIOWrapper, sys.stdout)
 sysStderr = cast(TextIOWrapper, sys.stderr)
@@ -30,6 +32,8 @@ VERSION = "2.6.1"
 
 TAB_WIDTH = 4
 TAB_CHAR = " " * TAB_WIDTH
+
+IS_WINDOWS = sys.platform == "win32"
 
 scriptDir = str(Path(__file__).parent)
 iconPath = str(Path(scriptDir).joinpath("resources", "icon.png"))
@@ -48,10 +52,11 @@ class CommandName(StrEnum):
     Clean = "clean"
     Build = "build"
     Rebuild = "rebuild"
-    BuildInstaller = "build-installer"
-    BuildAll = "build-all"
-    Install = "install"
-    Reinstall = "reinstall"
+    if IS_WINDOWS:
+        BuildInstaller = "build-installer"
+        BuildAll = "build-all"
+        Install = "install"
+        Reinstall = "reinstall"
     Help = "help"
 
 
@@ -69,26 +74,39 @@ class Command:
     class Rebuild:
         pass
 
-    @dataclass
-    class BuildInstaller:
-        isccPath: Optional[str] = None
+    if IS_WINDOWS:
 
-    @dataclass
-    class BuildAll:
-        isccPath: Optional[str] = None
+        @dataclass
+        class BuildInstaller:
+            isccPath: Optional[str] = None
 
-    @dataclass
-    class Install:
-        pass
+        @dataclass
+        class BuildAll:
+            isccPath: Optional[str] = None
 
-    @dataclass
-    class Reinstall:
-        isccPath: Optional[str] = None
+        @dataclass
+        class Install:
+            pass
+
+        @dataclass
+        class Reinstall:
+            isccPath: Optional[str] = None
+
+    if IS_WINDOWS:
+        CommandType = Union[
+            Clean,
+            Build,
+            Rebuild,
+            BuildInstaller,
+            BuildAll,
+            Install,
+            Reinstall,
+        ]
+    else:
+        CommandType = Union[Clean, Build, Rebuild]
 
     @staticmethod
-    def fromArgs(
-        args: argparse.Namespace,
-    ) -> Union[Clean, Build, Rebuild, BuildInstaller, BuildAll, Install, Reinstall]:
+    def fromArgs(args: argparse.Namespace) -> CommandType:
         match CommandName(args.command):
             case CommandName.Clean:
                 return Command.Clean()
@@ -98,12 +116,14 @@ class Command:
                 return Command.Rebuild()
             case CommandName.BuildInstaller:
                 return Command.BuildInstaller(args.isccPath)
-            case CommandName.BuildAll:
+            case CommandName.BuildAll if IS_WINDOWS:
                 return Command.BuildAll(args.isccPath)
-            case CommandName.Install:
+            case CommandName.Install if IS_WINDOWS:
                 return Command.Install()
-            case CommandName.Reinstall:
+            case CommandName.Reinstall if IS_WINDOWS:
                 return Command.Reinstall(args.isccPath)
+            case _:
+                raise ValueError(f"Unknown Command '{args.command}'")
 
 
 def createArgParser() -> argparse.ArgumentParser:
@@ -161,61 +181,62 @@ def createArgParser() -> argparse.ArgumentParser:
         description="Rebuild the executable package",
     )
 
-    subParsers.add_parser(
-        CommandName.BuildInstaller,
-        add_help=False,
-        parents=[helpParent],
-        help="Build the installer using Inno Setup Compiler",
-        description="Build the installer using Inno Setup Compiler",
-    ).add_argument(
-        "-p",
-        "--iscc-path",
-        metavar="ISCC_PATH",
-        dest="isccPath",
-        action="store",
-        default=None,
-        help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
-    )
+    if IS_WINDOWS:
+        subParsers.add_parser(
+            CommandName.BuildInstaller,
+            add_help=False,
+            parents=[helpParent],
+            help="Build the installer using Inno Setup Compiler",
+            description="Build the installer using Inno Setup Compiler",
+        ).add_argument(
+            "-p",
+            "--iscc-path",
+            metavar="ISCC_PATH",
+            dest="isccPath",
+            action="store",
+            default=None,
+            help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
+        )
 
-    subParsers.add_parser(
-        CommandName.BuildAll,
-        add_help=False,
-        parents=[helpParent],
-        help="Build both the executable and installer packages",
-        description="Build both the executable and installer packages",
-    ).add_argument(
-        "-p",
-        "--iscc-path",
-        metavar="ISCC_PATH",
-        dest="isccPath",
-        action="store",
-        default=None,
-        help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
-    )
+        subParsers.add_parser(
+            CommandName.BuildAll,
+            add_help=False,
+            parents=[helpParent],
+            help="Build both the executable and installer packages",
+            description="Build both the executable and installer packages",
+        ).add_argument(
+            "-p",
+            "--iscc-path",
+            metavar="ISCC_PATH",
+            dest="isccPath",
+            action="store",
+            default=None,
+            help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
+        )
 
-    subParsers.add_parser(
-        CommandName.Install,
-        add_help=False,
-        parents=[helpParent],
-        help="Install the application by running the generated installer",
-        description="Install the application by running the generated installer",
-    )
+        subParsers.add_parser(
+            CommandName.Install,
+            add_help=False,
+            parents=[helpParent],
+            help="Install the application by running the generated installer",
+            description="Install the application by running the generated installer",
+        )
 
-    subParsers.add_parser(
-        CommandName.Reinstall,
-        add_help=False,
-        parents=[helpParent],
-        help="Rebuild, build installer, and install",
-        description="Rebuild, build installer, and install",
-    ).add_argument(
-        "-p",
-        "--iscc-path",
-        metavar="ISCC_PATH",
-        dest="isccPath",
-        action="store",
-        default=None,
-        help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
-    )
+        subParsers.add_parser(
+            CommandName.Reinstall,
+            add_help=False,
+            parents=[helpParent],
+            help="Rebuild, build installer, and install",
+            description="Rebuild, build installer, and install",
+        ).add_argument(
+            "-p",
+            "--iscc-path",
+            metavar="ISCC_PATH",
+            dest="isccPath",
+            action="store",
+            default=None,
+            help="Path to Inno Setup Compiler (ISCC) executable, default: %(default)s",
+        )
 
     subParsers.add_parser(
         "help",
@@ -232,73 +253,72 @@ def updateMainScriptVersion() -> None:
     """
     Updates the version string in the main script file.
 
-    This function reads the main script file, updates the version string, and writes the updated content back to the file.
+    This function reads the main script file, updates the version string,
+    and writes the updated content back to the file.
     """
 
-    with open(file=mainScript, mode="r+", encoding="utf-8") as fileDescriptor:
-        lines = fileDescriptor.readlines()
+    with open(file=mainScript, mode="r+", encoding="utf-8") as fd:
+        lines = fd.readlines()
 
-        fileDescriptor.seek(0)
-        fileDescriptor.truncate()
+        fd.seek(0)
+        fd.truncate()
 
         for line in lines:
             if line.strip().startswith("VERSION"):
-                fileDescriptor.write(f'VERSION = "{VERSION}"\n')
+                fd.write(f'VERSION = "{VERSION}"\n')
             else:
-                fileDescriptor.write(line)
+                fd.write(line)
 
 
 def updateSetupScriptVersion() -> None:
     """
     Updates the version string in the setup script file.
 
-    This function reads the setup script file, updates the version string, and writes the updated content back to the file.
+    This function reads the setup script file, updates the version string,
+    and writes the updated content back to the file.
     """
 
-    with open(file=setupScript, mode="r+", encoding="utf-8") as fileDescriptor:
-        lines = fileDescriptor.readlines()
+    with open(file=setupScript, mode="r+", encoding="utf-8") as fd:
+        lines = fd.readlines()
 
-        fileDescriptor.seek(0)
-        fileDescriptor.truncate()
+        fd.seek(0)
+        fd.truncate()
 
         for line in lines:
             if line.strip().startswith("#define AppVersion"):
-                fileDescriptor.write(f'#define AppVersion "{VERSION}"\n')
+                fd.write(f'#define AppVersion "{VERSION}"\n')
             else:
-                fileDescriptor.write(line)
+                fd.write(line)
 
 
 def updateVersionInfoScriptVersion() -> None:
     """
     Updates the version string in the version info script file.
 
-    This function reads the version info script file, updates the version string, and writes the updated content back to the file.
+    This function reads the version info script file, updates the version string,
+    and writes the updated content back to the file.
     """
 
     versionParts = VERSION.split(".")
     versionTuple = tuple(int(versionPart) for versionPart in versionParts) + (0,) * (4 - len(versionParts))
 
-    with open(file=versionInfoScript, mode="r+", encoding="utf-8") as fileDescriptor:
-        lines = fileDescriptor.readlines()
+    with open(file=versionInfoScript, mode="r+", encoding="utf-8") as fd:
+        lines = fd.readlines()
 
-        fileDescriptor.seek(0)
-        fileDescriptor.truncate()
+        fd.seek(0)
+        fd.truncate()
 
         for line in lines:
             if "filevers=" in line:
-                fileDescriptor.write(f"{TAB_CHAR}filevers={versionTuple},\n")
+                fd.write(f"{TAB_CHAR}filevers={versionTuple},\n")
             elif "prodvers=" in line:
-                fileDescriptor.write(f"{TAB_CHAR}prodvers={versionTuple},\n")
+                fd.write(f"{TAB_CHAR}prodvers={versionTuple},\n")
             elif 'StringStruct("FileVersion"' in line:
-                fileDescriptor.write(
-                    f'{TAB_CHAR * 6}StringStruct("FileVersion", "{VERSION}"),  # Matches "File version"\n'
-                )
+                fd.write(f'{TAB_CHAR * 6}StringStruct("FileVersion", "{VERSION}"),  # Matches "File version"\n')
             elif 'StringStruct("ProductVersion"' in line:
-                fileDescriptor.write(
-                    f'{TAB_CHAR * 6}StringStruct("ProductVersion", "{VERSION}"),  # Matches "Product version"\n'
-                )
+                fd.write(f'{TAB_CHAR * 6}StringStruct("ProductVersion", "{VERSION}"),  # Matches "Product version"\n')
             else:
-                fileDescriptor.write(line)
+                fd.write(line)
 
 
 def updateVersions() -> None:
@@ -345,7 +365,7 @@ def runCommand(command: list[str], errorMessage: str | None = None) -> None:
             for line in iter(pipe.readline, ""):
                 if file == sys.stderr:
                     stderr.append(line.strip())
-                    error = colorize(f"[!] {line.strip()}", foreground=RED)
+                    error = ColoredString(f"[!] {line.strip()}").color(Color.Red)
                     print(error, file=file, flush=True)
                 else:
                     print(f"[*] {line.strip()}", file=file, flush=True)
@@ -361,9 +381,9 @@ def runCommand(command: list[str], errorMessage: str | None = None) -> None:
         """
 
         if errorMessage:
-            error = colorize(f"[!] {errorMessage}: {message}", foreground=RED)
+            error = ColoredString(f"[!] {errorMessage}: {message}").color(Color.Red)
         else:
-            error = colorize(f"[!] {message}", foreground=RED)
+            error = ColoredString(f"[!] {message}").color(Color.Red)
 
         print(error, file=sys.stderr)
 
@@ -395,18 +415,18 @@ def runCommand(command: list[str], errorMessage: str | None = None) -> None:
             raise subprocess.CalledProcessError(pid.returncode, erroneousCommand, stderr="\n".join(stderr))
 
     except KeyboardInterrupt:
-        error = colorize("\nProcess interrupted by user", foreground=RED)
+        error = ColoredString("\nProcess interrupted by user").color(Color.Red)
         print(error, file=sys.stderr)
 
         sys.exit(0)
     except subprocess.CalledProcessError as ex:
-        error = colorize("\nERRORS:", foreground=RED)
+        error = ColoredString("\nERRORS:").color(Color.Red)
         print(error, file=sys.stderr)
 
         printException(str(ex))
 
         for line in ex.stderr.splitlines():
-            error = colorize(f"[!] {line}", foreground=RED)
+            error = ColoredString(f"[!] {line}").color(Color.Red)
             print(error, file=sys.stderr)
 
         sys.exit(ex.returncode)
@@ -472,18 +492,14 @@ def runBuildInstaller(isccPath: Optional[str] = None) -> None:
     except FileNotFoundError as ex:
         erroneiousPath = isccPath
 
-        error = colorize(
-            f"[!] Error occurred while building installer: {ex}: '{erroneiousPath}'",
-            foreground=RED,
-        )
+        error = ColoredString(f"[!] Error occurred while building installer: {ex}: '{erroneiousPath}'").color(Color.Red)
         print(error, file=sys.stderr)
 
-        error = colorize(
+        error = ColoredString(
             f"[!] Inno Setup Compiler (iscc) not found at path: '{erroneiousPath}'. "
             "Please install Inno Setup and ensure 'iscc' is in your system PATH, "
-            "or provide the correct path using the --iscc-path argument.",
-            foreground=RED,
-        )
+            "or provide the correct path using the --iscc-path argument."
+        ).color(Color.Red)
         print(error, file=sys.stderr)
 
         sys.exit(ex.errno)
@@ -505,21 +521,23 @@ def runInstaller() -> None:
 
         runCommand(command=command, errorMessage="Error occurred while running installer")
     else:
-        error = colorize("[!] installer path not found!", foreground=RED)
+        error = ColoredString("[!] installer path not found!").color(Color.Red)
         print(error, file=sys.stderr)
         sys.exit(1)
 
 
 def splitArgs(args: str) -> List[str]:
-    return args.split(r"\s+")
+    return args.split(" ")
 
 
 def main() -> None:
     """
     Main entry point for the build script.
 
-    This function parses the command-line arguments, updates version information, and runs the necessary build steps.
-    It will clean the generated files, run PyInstaller, build the installer, install the application, reinstall the application, or run the installer based on the arguments provided.
+    This function parses the command-line arguments, updates version information,
+    and runs the necessary build steps.
+    It will clean the generated files, run PyInstaller, build the installer,
+    install the application, reinstall the application, or run the installer based on the arguments provided.
     """
 
     parser = createArgParser()
