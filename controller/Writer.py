@@ -1,8 +1,9 @@
 from typing import TextIO
+from typing import Optional
 
 
 class Writer:
-    def __init__(self, width: int, showColors: bool, outputFile: TextIO) -> None:
+    def __init__(self, width: Optional[int], showColors: bool, outputFile: TextIO) -> None:
         self.width = width
         self.showColors = showColors
         self.outputFile = outputFile

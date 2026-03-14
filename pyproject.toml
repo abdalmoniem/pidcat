@@ -11,30 +11,5 @@ dependencies = [
     "pyinstaller==6.17.0",
 ]
 
-[tool.tomlscript]
-# Command to build the executable using PyInstaller
-run = "uv run main.py"
-
-# Command to build the executable using PyInstaller
-build = "uv run build/build.py --build-executable"
-
-# Command to clean the build directory
-clean = "uv run build/build.py --clean"
-
-# Command to rebuild the executable
-rebuild = "uv run build/build.py --rebuild"
-
-# Command to build the installer using Inno Setup Compiler
-build-installer = "uv run build/build.py --build-installer"
-
-# Command to perform a full rebuild and create the installer
-build-all = "uv run build/build.py --build-all"
-
-# Command to install the application by running the generated installer
-install = "uv run build/build.py --install"
-
-# Command to perform a full rebuild, create the installer, and install the application
-reinstall = "uv run build/build.py --reinstall"
-
 [tool.ruff]
 line-length = 120

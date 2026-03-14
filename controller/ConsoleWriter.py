@@ -1,18 +1,14 @@
+import io
 import sys
-from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent))
-
-from Writer import Writer
 from typing import override
+from controller.Writer import Writer
 
 
 class ConsoleWriter(Writer):
     """Configuration for color output."""
 
     def __init__(self, width: int, showColors: bool) -> None:
-        import io
-
         self.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
         super().__init__(width=width, showColors=showColors, outputFile=self.stdout)
 
@@ -28,4 +24,3 @@ class ConsoleWriter(Writer):
     def close(self) -> None:
         self.stdout.flush()
         self.stdout.detach()
-

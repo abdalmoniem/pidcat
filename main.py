@@ -5,8 +5,6 @@ import argparse
 
 from pathlib import Path
 
-from dataclasses import dataclass
-
 from controller.Writer import Writer
 from controller.FileWriter import FileWriter
 from controller.ConsoleWriter import ConsoleWriter
@@ -16,6 +14,7 @@ from model.CliArgs import CliArgs
 from model.MockTTY import MockTTY
 from model.AdbDevice import AdbDevice
 from model.AdbState import AdbState
+from utils.Colored import Color, ColoredString
 
 from subprocess import PIPE, CompletedProcess
 from subprocess import run as processRun
@@ -29,17 +28,6 @@ from typing import Dict
 from typing import Tuple
 from typing import Optional
 
-from utils.terminalColors import RED
-from utils.terminalColors import BLUE
-from utils.terminalColors import CYAN
-from utils.terminalColors import RESET
-from utils.terminalColors import BLACK
-from utils.terminalColors import GREEN
-from utils.terminalColors import WHITE
-from utils.terminalColors import YELLOW
-from utils.terminalColors import MAGENTA
-from utils.terminalColors import colorize
-from utils.terminalColors import terminalColor
 
 VERSION = "2.6.1"
 
@@ -47,24 +35,15 @@ LOG_LEVELS = "VDIWEF"
 LOG_LEVELS_MAP = {level: index for index, level in enumerate(LOG_LEVELS)}
 
 TAG_COLORS = [
-    RED,
-    BLUE,
-    CYAN,
-    GREEN,
-    YELLOW,
-    MAGENTA,
+    Color.BrightRed,
+    Color.BrightBlue,
+    Color.BrightCyan,
+    Color.BrightGreen,
+    Color.BrightYellow,
+    Color.BrightMagenta,
 ]
 
-KNOWN_TAGS = {
-    "jdwp": WHITE,
-    "DEBUG": YELLOW,
-    "Process": WHITE,
-    "dalvikvm": WHITE,
-    "StrictMode": WHITE,
-    "AndroidRuntime": CYAN,
-    "ActivityThread": WHITE,
-    "ActivityManager": WHITE,
-}
+KNOWN_TAGS = dict[str, Color]()
 
 SYSTEM_TAGS = [
     r"Tile",
@@ -142,7 +121,6 @@ SYSTEM_TAGS = [
     r"oplus\.android\.OplusFrameworkFactoryImpl",
 ]
 
-NO_COLOR = re.compile(r"\033\[.*?m")
 BACKTRACE_LINE = re.compile(r"^#(.*?)pc\s(.*?)$")
 NATIVE_TAGS_LINE = re.compile(r".*nativeGetEnabledTags.*")
 LOG_LINE = re.compile(r"^([A-Z])/(.+?)\( *(\d+)\): (.*?)$")
@@ -153,10 +131,14 @@ PID_LINE = re.compile(r"^\w+\s+(\w+)\s+\w+\s+\w+\s+\w+\s+\w+\s+\w+\s+\w\s(.*?)$"
 PID_START = re.compile(r"^.*: Start proc (\d+):([a-zA-Z0-9._:]+)/[a-z0-9]+ for (.*)$")
 PID_START_UGID = re.compile(r"^.*: Start proc ([a-zA-Z0-9._:]+) for ([a-z]+ [^:]+): pid=(\d+) uid=(\d+) gids=(.*)$")
 PID_START_DALVIK = re.compile(r"^E/dalvikvm\(\s*(\d+)\): >>>>> ([a-zA-Z0-9._:]+) \[ userId:0 \| appId:(\d+) \]$")
-VISIBLE_ACTIVITIES = re.compile(
-    r"VisibleActivityProcess\:\[\s*(?:(?:ProcessRecord\{\w+\s*\d+\:(?:[a-zA-Z.]+)\/\w+\})\s*)+\]"
+STRICT_MODE = re.compile(r"^(StrictMode policy violation)(; ~duration=)(\d+ ms)")
+GC_COLOR = re.compile(
+    r"^(GC_(?:CONCURRENT|FOR_M?ALLOC|EXTERNAL_ALLOC|EXPLICIT) )(freed <?\d+.)(, \d+\% free \d+./\d+., )(paused \d+ms(?:\+\d+ms)?)"
 )
-VISIBLE_PACKAGES = re.compile(r"ProcessRecord\{\w+\s*\d+\:([a-zA-Z.]+)\/\w+\}")
+VISIBLE_ACTIVITIES = re.compile(
+    r"VisibleActivityProcess:\[\s*(?:(?:ProcessRecord\{\w+\s*\d+:(?:[a-zA-Z.]+)/\w+\})\s*)+\]"
+)
+VISIBLE_PACKAGES = re.compile(r"ProcessRecord\{\w+\s*\d+:([a-zA-Z.]+)/\w+\}")
 
 
 def getVersion(name: str) -> str:
@@ -285,7 +267,8 @@ def getArgParser() -> argparse.ArgumentParser:
         metavar="IGNORED_TAG",
         dest="ignoreTag",
         action="append",
-        help="Filter output by ignoring specified tag(s)\nThis can be specified multiple times, or as a comma separated list",
+        help="Filter output by ignoring specified tag(s)\n"
+        "This can be specified multiple times, or as a comma separated list",
     )
 
     filteringOptions.add_argument(
@@ -338,17 +321,17 @@ def getArgParser() -> argparse.ArgumentParser:
     formattingOptions.add_argument(
         "-x",
         "--pid-width",
-        metavar="X",
+        metavar="WIDTH",
         dest="pidWidth",
         type=int,
-        default=6,
+        default=5,
         help="Width of PID column, default: %(default)s",
     )
 
     formattingOptions.add_argument(
         "-n",
         "--package-width",
-        metavar="N",
+        metavar="WIDTH",
         dest="packageWidth",
         type=int,
         default=20,
@@ -358,7 +341,7 @@ def getArgParser() -> argparse.ArgumentParser:
     formattingOptions.add_argument(
         "-m",
         "--tag-width",
-        metavar="M",
+        metavar="WIDTH",
         dest="tagWidth",
         type=int,
         default=20,
@@ -404,13 +387,20 @@ def getConsoleWidth() -> int:
     return width
 
 
-def getWrappedIndent(message: str, width: int, headerSize: int) -> str:
+def getWrappedIndent(
+    message: str | ColoredString,
+    width: Optional[int],
+    headerSize: int,
+    showColors: bool,
+    foreground: Optional[Color],
+    background: Optional[Color],
+) -> str | ColoredString:
     """Wraps and indents long log messages."""
 
-    if width == -1:
+    if not width:
         return message
 
-    message = message.replace("\t", "    ")
+    message = message.replace("\t", "   ")
     wrapArea = width - headerSize
     messageBuffer = ""
     current = 0
@@ -420,22 +410,44 @@ def getWrappedIndent(message: str, width: int, headerSize: int) -> str:
         messageBuffer += message[current:nextIndex]
 
         if nextIndex < len(message):
+            futureIndex = nextIndex + wrapArea
+            isLastLine = futureIndex >= len(message)
             messageBuffer += "\n"
-            messageBuffer += " " * headerSize
+            messageBuffer += " " * (headerSize - 4)
 
+            connector = "   " if foreground == background else " ╠═" if not isLastLine else " ╚═"
+            coloredConnector = ColoredString(connector)
+
+            if foreground:
+                coloredConnector = coloredConnector.color(foreground)
+
+            if background:
+                coloredConnector = coloredConnector.onColor(background)
+
+            if showColors:
+                messageBuffer += coloredConnector
+            else:
+                messageBuffer += connector
+            messageBuffer += " "
         current = nextIndex
 
     return messageBuffer
 
 
-def getTagColor(tag: str) -> int:
+def getTokenColor(tag: str) -> Color:
     """Allocates a unique color for a tag based on LRU."""
 
     if tag not in KNOWN_TAGS:
-        KNOWN_TAGS[tag] = TAG_COLORS.pop(0)
+        if TAG_COLORS:
+            KNOWN_TAGS[tag] = TAG_COLORS[0]
+        else:
+            return Color.White
 
     color = KNOWN_TAGS[tag]
-    TAG_COLORS.append(color)
+
+    if color in TAG_COLORS:
+        TAG_COLORS.remove(color)
+        TAG_COLORS.append(color)
 
     return color
 
@@ -468,7 +480,7 @@ def startAdbServer(baseAdbCommand: List[str]) -> Result[None, CompletedProcess[s
     stdout = "\n".join([line for line in output.splitlines() if line])
 
     if stdout:
-        message = colorize(stdout, foreground=CYAN)
+        message = ColoredString(stdout).color(Color.BrightCyan)
         print(message)
 
     return Ok(None)
@@ -549,7 +561,11 @@ def getProcesses(baseAdbCommand: List[str], catchallPackage: List[str], args: Cl
 
 
 def getDeadProcesses(
-    tag: str, message: str, pidsSet: Set[str], namedProcesses: List[str], catchallPackage: List[str]
+    tag: str,
+    message: str,
+    pidsSet: Set[str],
+    namedProcesses: List[str],
+    catchallPackage: List[str],
 ) -> Tuple[Optional[str], Optional[str]]:
     """Parses log lines for process death and removal."""
 
@@ -620,26 +636,38 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
     pidWidth = args.pidWidth
     packageWidth = args.packageWidth
     tagWidth = args.tagWidth
-    currentHeaderSize = 0
+    headerSize = 0
 
     writerBuffers = [""] * len(writers)
 
-    def writeToken(outputLine: str, wrap: bool = False) -> None:
+    def writeToken(
+        message: str | ColoredString,
+        wrap: bool = False,
+        foreground: Optional[Color] = None,
+        background: Optional[Color] = None,
+    ) -> None:
         for index, writer in enumerate(writers):
-            if wrap and writer.width != -1:
-                buffer = getWrappedIndent(outputLine, writer.width, currentHeaderSize)
+            if wrap and writer.width:
+                buffer = getWrappedIndent(
+                    message,
+                    writer.width,
+                    headerSize,
+                    writer.showColors,
+                    foreground,
+                    background,
+                )
             else:
-                buffer = outputLine
+                buffer = message
 
-            lineNoColor = NO_COLOR.sub("", buffer)
-            writerBuffers[index] += buffer if writer.showColors else lineNoColor
+            if isinstance(buffer, ColoredString) and not writer.showColors:
+                buffer = buffer._raw
 
-    nativeTags = NATIVE_TAGS_LINE.match(line)
-    if nativeTags:
+            writerBuffers[index] += buffer
+
+    if NATIVE_TAGS_LINE.match(line):
         return
 
-    logLine = LOG_LINE.match(line)
-    if not logLine:
+    if not (logLine := LOG_LINE.match(line)):
         return
 
     level, tag, owner, message = logLine.groups()
@@ -647,7 +675,7 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
     startedProcess = getStartedProcesses(line)
 
     # Calculate current base header size (level + spaces)
-    baseLevelSize = 3 + 1  # Level width + space
+    baseLevelSize = 3 + 1 + 1  # Level width + space
 
     # Process Start/Death events
     if startedProcess:
@@ -657,31 +685,40 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
             appPID = startedPID
 
             # Recalculate header size for process start/end messages
-            currentHeaderSize = (packageWidth + 2 if args.showPackage else 0) + args.tagWidth + baseLevelSize
+            headerSize = (packageWidth + 7 if args.showPackage else 0) + args.tagWidth + baseLevelSize
 
-            writeToken("\n")
-            writeToken(colorize(" " * (currentHeaderSize - 1), background=WHITE))
+            writeToken(ColoredString(" " * (headerSize - 1)).color(Color.BrightGreen).onColor(Color.BrightGreen))
             writeToken(f" Process {startedPackage} created for {startedTarget}\n", wrap=True)
 
-            writeToken(colorize(" " * (currentHeaderSize - 1), background=WHITE))
+            writeToken(ColoredString(" " * (headerSize - 1)).color(Color.BrightGreen).onColor(Color.BrightGreen))
             writeToken(f" PID: {startedPID}   UID: {startedUID}   GIDs: {startedGIDs}")
             writeToken("\n")
 
             lastTag = None
+            
+            for index, writer in enumerate(writers):
+                writer.write(writerBuffers[index])
+                writer.flush()
+
+            return
 
     deadPID, deadProcName = getDeadProcesses(tag, message, set(pidsMap.keys()), namedProcesses, catchallPackage)
     if deadPID:
         if deadPID in pidsMap:
             del pidsMap[deadPID]
 
-        currentHeaderSize = (packageWidth + 2 if args.showPackage else 0) + args.tagWidth + baseLevelSize
+        headerSize = (packageWidth + 2 if args.showPackage else 0) + args.tagWidth + baseLevelSize
 
-        writeToken("\n")
-        writeToken(colorize(" " * (currentHeaderSize - 1), background=RED))
+        writeToken(ColoredString(" " * (headerSize - 1)).color(Color.BrightRed).onColor(Color.BrightRed))
         writeToken(f" Process {deadProcName} (PID: {deadPID}) ended")
-        writeToken("\n")
 
         lastTag = None
+        
+        for index, writer in enumerate(writers):
+            writer.write(writerBuffers[index])
+            writer.flush()
+
+        return
 
     # Filter logs
     if not args.all and owner not in pidsMap:
@@ -704,97 +741,84 @@ def writeLogLine(line: str, state: State, args: CliArgs, writers: List[Writer]) 
             owner = appPID  # Associate backtrace with the app PID
 
     # lineBuffer = ""
-    currentHeaderSize = 0
+    headerSize = 0
 
     # --- OWNER PID SECTION ---
     if args.showPID and owner:
-        pidColor = getTagColor(owner)
+        pidColor = getTokenColor(owner)
 
         if len(owner) > pidWidth:
-            owner = f"{owner[: pidWidth - 3]}..."
+            owner = f"{owner[: pidWidth - 1]}…"
         pidDisplay = owner.ljust(pidWidth)
 
-        writeToken(colorize(pidDisplay, pidColor))
-        writeToken("  ")  # Two spaces separator
-        currentHeaderSize += pidWidth + 2
+        writeToken(ColoredString(pidDisplay).color(pidColor))
+        writeToken(" ")  # one space separator
+        headerSize += pidWidth + 1
     # ----------------------------
 
     # --- PACKAGE NAME SECTION ---
     if args.showPackage and owner:
         packageName = pidsMap.get(owner, f"UNKNOWN({owner})")
-        pkgColor = getTagColor(packageName)
+        pkgColor = getTokenColor(packageName)
 
         if len(packageName) > packageWidth:
-            packageName = f"{packageName[: packageWidth - 3]}..."
+            packageName = f"{packageName[: packageWidth - 1]}…"
         pkgDisplay = packageName.ljust(packageWidth)
 
-        writeToken(colorize(pkgDisplay, pkgColor))
-        writeToken("  ")  # Two spaces separator
-        currentHeaderSize += packageWidth + 2
+        writeToken(ColoredString(pkgDisplay).color(pkgColor))
+        writeToken(" ")  # one space separator
+        headerSize += packageWidth + 1
     # ----------------------------
 
     # --- TAG SECTION ---
     if args.tagWidth > 0:
         if tag != lastTag or args.alwaysShowTags:
             lastTag = tag
-            color = getTagColor(tag)
+            color = getTokenColor(tag)
 
             if len(tag) > tagWidth:
-                tag = f"{tag[: tagWidth - 3]}..."
+                tag = f"{tag[: tagWidth - 1]}…"
             tag = tag.rjust(tagWidth) if args.showPackage else tag.ljust(tagWidth)
 
-            writeToken(colorize(tag, color))
+            writeToken(ColoredString(tag).color(color))
         else:
             writeToken(" " * tagWidth)
 
         writeToken(" ")
-        currentHeaderSize += tagWidth + 1
+        headerSize += tagWidth + 1
     # ----------------------------
 
     # --- LEVEL SECTION ---
-    foreground = {"V": WHITE, "D": BLACK, "I": BLACK, "W": BLACK, "E": BLACK, "F": BLACK}.get(level, WHITE)
-    background = {"V": BLACK, "D": BLUE, "I": GREEN, "W": YELLOW, "E": RED, "F": RED}.get(level, BLACK)
-    levelStr = colorize(f" {level} ", foreground, background)
+    foreground = Color.Black
+    background = {
+        "D": Color.BrightBlue,
+        "I": Color.BrightGreen,
+        "W": Color.BrightYellow,
+        "E": Color.BrightRed,
+        "F": Color.TrueColor(250, 65, 25),
+        "V": Color.BrightCyan,
+    }.get(level, Color.Black)
+    levelStr = ColoredString(f" {level} ").color(foreground).onColor(background)
     writeToken(levelStr)
     writeToken(" ")
-    currentHeaderSize += baseLevelSize  # Level width + space
+    headerSize += len(levelStr._raw) + 1 # Level width + space
     # ----------------------------
 
-    @dataclass
-    class MessageRule:
-        """A rule to apply to a log message"""
-
-        matchPattern: re.Pattern[str]
-        """The regex pattern to match"""
-
-        subPattern: str
-        """The substitution pattern to apply"""
-
     # --- MESSAGE SECTION --- (apply rules)
-    messageRules = list[MessageRule]()
+    if match := STRICT_MODE.match(message):
+        message = f"{match[1]}"
+        message += f"{ColoredString(match[2]).color(Color.BrightRed)}"
+        message += f"{ColoredString(match[3]).color(Color.BrightYellow)}"
 
-    redColor = terminalColor(RED)
-    yellowColor = terminalColor(YELLOW)
-    greenColor = terminalColor(GREEN)
-
-    # StrictMode rule
-    STRICT_MODE = re.compile(r"^(StrictMode policy violation)(; ~duration=)(\d+ ms)")
-    strictModeRule = MessageRule(STRICT_MODE, rf"\1{redColor}\2{yellowColor}\3{RESET}")
-    messageRules.append(strictModeRule)
-
-    # GC color rule
-    if args.gcColor:
-        GC_COLOR = re.compile(
-            r"^(GC_(?:CONCURRENT|FOR_M?ALLOC|EXTERNAL_ALLOC|EXPLICIT) )"
-            + r"(freed <?\d+.)(, \d+\% free \d+./\d+., )(paused \d+ms(?:\+\d+ms)?)"
+    if args.gcColor and (match := GC_COLOR.match(message)):
+        message = (
+            f"{match[1]}"
+            f"{ColoredString(match[2]).color(Color.BrightGreen)}"
+            f"{match[3]}"
+            f"{ColoredString(match[4]).color(Color.BrightYellow)}"
         )
-        gcColorRule = MessageRule(GC_COLOR, rf"\1{greenColor}\2{RESET}\3{yellowColor}\4{RESET}")
-        messageRules.append(gcColorRule)
 
-    for rule in messageRules:
-        message = rule.matchPattern.sub(rule.subPattern, message)
-
-    writeToken(message, wrap=True)
+    writeToken(message, wrap=True, foreground=foreground, background=background)
     writeToken("\n")
 
     for index, writer in enumerate(writers):
@@ -882,49 +906,51 @@ def main() -> None:
         if args.regex:
             adbCommand.extend(["-e", args.regex])
 
-        message = colorize("Starting ADB Server...", foreground=CYAN)
-        print(message)
+        if sys.stdin.isatty():
+            message = ColoredString("Starting ADB Server…").color(Color.BrightCyan)
+            print(message)
 
-        match startAdbServer(baseAdbCommand):
-            case Err() as err:
-                err = CompletedProcess[str](**vars(err.err_value))
-                errHdr = colorize(f"ERROR: {err.stderr.strip()}", foreground=RED, bold=True)
-                errMsg = colorize(
-                    "Could not start ADB server, check that ADB is added to env PATH and try again!",
-                    foreground=RED,
-                    bold=True,
-                )
+            match startAdbServer(baseAdbCommand):
+                case Err() as err:
+                    err = CompletedProcess[str](**vars(err.err_value))
+                    errHdr = ColoredString(f"ERROR: {err.stderr.strip()}").color(Color.BrightRed).bold()
+                    errMsg = (
+                        ColoredString("Could not start ADB server, check that ADB is added to env PATH and try again!")
+                        .color(Color.BrightRed)
+                        .bold()
+                    )
 
-                print(errHdr, file=sys.stderr)
-                print(errMsg, file=sys.stderr)
-                sys.exit(err.returncode)
+                    print(errHdr, file=sys.stderr)
+                    print(errMsg, file=sys.stderr)
+                    sys.exit(err.returncode)
 
-        match getAdbDevices(baseAdbCommand):
-            # TODO: implement device selection
-            case [AdbDevice(), *_] as devices:
-                for index, device in enumerate(devices):
-                    message = colorize(f"Found Device #{index}: {device}", foreground=CYAN, bold=True)
-                    print(message)
-            case None:
-                errHdr = colorize("ERROR: not connected", foreground=RED, bold=True)
-                errMsg = colorize(
-                    "ADB cannot find any attached devices, attach a device and try again!", foreground=RED, bold=True
-                )
+            match getAdbDevices(baseAdbCommand):
+                # TODO: implement device selection
+                case [AdbDevice(), *_] as devices:
+                    for index, device in enumerate(devices):
+                        message = ColoredString(f"Found Device #{index}: {device}").color(Color.BrightCyan).bold()
+                        print(message)
+                case None:
+                    errHdr = ColoredString("ERROR: not connected").color(Color.BrightRed).bold()
+                    errMsg = (
+                        ColoredString("ADB cannot find any attached devices, attach a device and try again!")
+                        .color(Color.BrightRed)
+                        .bold()
+                    )
 
-                if sys.stdin.isatty():
                     print(errHdr, file=sys.stderr)
                     print(errMsg, file=sys.stderr)
                     sys.exit(2)
 
-        if not args.keepLogcat and sys.stdin.isatty():
-            adbClearCommand = baseAdbCommand + ["logcat", "-c"]
-            processRun(adbClearCommand, check=False)
+            if not args.keepLogcat:
+                adbClearCommand = baseAdbCommand + ["logcat", "-c"]
+                processRun(adbClearCommand, check=False)
 
         if packages:
-            print(f"Capturing logcat messages from packages: [{', '.join(packages)}]...")
+            print(f"Capturing logcat messages from packages: [{', '.join(packages)}]…")
         else:
             args.all = True
-            print("Capturing logcat messages...")
+            print("Capturing logcat messages…")
 
         # Determine exact processes vs. catch-all packages
         catchallPackage = list(filter(lambda package: package.find(":") == -1, packages))
@@ -958,21 +984,18 @@ def main() -> None:
                 line = str(rawLine).strip()
 
             # Update the writers width if changed
-            for writer in writers:
-                consoleWidth = getConsoleWidth()
-
-                # writers with width set to -1 are not
-                # console writers and should not be updated
-                if writer.width != -1:
-                    writer.width = consoleWidth
+            # writers with width set to None are not
+            # console writers and should not be updated
+            for writer in filter(lambda writer: writer.width, writers):
+                writer.width = getConsoleWidth()
 
             writeLogLine(line=line, state=state, args=args, writers=writers)
 
     except RuntimeError as ex:
         err = CompletedProcess[str](**vars(ex.args[0]))
-        errHdr = colorize(f"ERROR: {err.stderr.strip()}", foreground=RED)
-        errMsg = colorize(
-            "Could not start ADB server, check that ADB is added to env PATH and try again!", foreground=RED
+        errHdr = ColoredString(f"ERROR: {err.stderr.strip()}").color(Color.BrightRed)
+        errMsg = ColoredString("Could not start ADB server, check that ADB is added to env PATH and try again!").color(
+            Color.Red
         )
 
         if sys.stdin.isatty():
@@ -980,7 +1003,7 @@ def main() -> None:
             print(errMsg, file=sys.stderr)
             sys.exit(err.returncode)
     except KeyboardInterrupt:
-        msg = colorize(f"{Path(parser.prog).stem} stopped by user!", foreground=CYAN)
+        msg = ColoredString(f"{Path(parser.prog).stem} stopped by user!").color(Color.BrightCyan)
 
         print(msg, file=sys.stderr)
     finally:

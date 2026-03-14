@@ -4,12 +4,14 @@ alias r := run
 alias b := build
 alias c := clean
 alias rb := rebuild
-alias bi := build-installer
-alias ba := build-all
-alias i := install
-alias ri := reinstall
+# alias bi := build-installer
+# alias ba := build-all
+# alias i := install
+# alias ri := reinstall
 
 TARGET_OS := os()
+export VENV := if TARGET_OS == "windows" { ".venv" } else { ".venv_unix" }
+export UV_PROJECT_ENVIRONMENT := if TARGET_OS == "windows" { ".venv" } else { ".venv_unix" }
 
 [doc('List available recipes')]
 default:
@@ -18,43 +20,63 @@ default:
 [doc('Clean the build directory')]
 [group('build')]
 clean:
-    @uv run build/build.py clean
+    @env | grep UV_PROJECT_ENVIRONMENT
+
+    @uv run -m build.build clean
 
 [doc('Build the pidcat executable using PyInstaller')]
 [group('build')]
 build:
-    @uv run build/build.py build
+    @env | grep UV_PROJECT_ENVIRONMENT
+
+    @uv run -m build.build build
 
 [doc('Rebuild the pidcat executable using PyInstaller')]
 [group('build')]
 rebuild:
-    @uv run build/build.py rebuild
+    @env | grep UV_PROJECT_ENVIRONMENT
+
+    @uv run -m build.build rebuild
 
 [doc('Build the installer using Inno Setup Compiler')]
 [group('build')]
+[windows]
 build-installer:
-    @uv run build/build.py build-installer
+    @env | grep UV_PROJECT_ENVIRONMENT
+
+    @uv run -m build.build build-installer
 
 [doc('Perform a full rebuild and create the installer')]
 [group('build')]
+[windows]
 build-all:
-    @uv run build/build.py build-all
+    @env | grep UV_PROJECT_ENVIRONMENT
+
+    @uv run -m build.build build-all
 
 [doc('Run the pidcat python script directly')]
 [group('run')]
 run args:
+    @env | grep UV_PROJECT_ENVIRONMENT
+
     @uv run main.py $args
 
 [doc('Install the application by running the generated installer')]
 [group('install')]
+[windows]
 install:
-    @uv run build/build.py install
+    @env | grep UV_PROJECT_ENVIRONMENT
+
+    @uv run -m build.build install
 
     @just post_install
 
 [doc('Perform a full rebuild, create the installer, and install the application')]
 [group('install')]
+[windows]
 reinstall:
+    @env | grep UV_PROJECT_ENVIRONMENT
+
     @uv run build/build.py reinstall
 
     @just post_install
